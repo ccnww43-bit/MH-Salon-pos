@@ -1,0 +1,62 @@
+{
+  "name": "salon-pos",
+  "version": "1.0.0",
+  "private": true,
+  "author": "MH Digital",
+  "main": "app/electron/main.js",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "electron:dev": "electron .",
+    "dist": "next build && electron-builder --win"
+  },
+  "dependencies": {
+    "next": "14.2.23",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "dexie": "^4.0.1",
+    "dexie-react-hooks": "^1.1.7",
+    "lucide-react": "^0.321.0",
+    "clsx": "^2.1.0",
+    "tailwind-merge": "^2.2.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "@types/node": "^20.11.16",
+    "@types/react": "^18.2.52",
+    "@types/react-dom": "^18.2.18",
+    "postcss": "^8.4.35",
+    "tailwindcss": "^3.4.1",
+    "autoprefixer": "^10.4.17",
+    "electron": "^31.0.2",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.mhdigital.salonpos",
+    "productName": "Salon POS",
+    "copyright": "Copyright © 2026 MH Digital",
+    "files": [
+      "app/electron/**/*",
+      "out/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico"
+    }
+  }
+}
