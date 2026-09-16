@@ -58,10 +58,13 @@ export default function StaffPage() {
   // Commissions). Offered here so an HR profile can optionally be linked to
   // the login account the same person uses operationally.
   const loginAccounts = useLiveQuery(() => db.users.filter(u => u.isActive).toArray(), []);
+  const allLoginAccounts = useLiveQuery(() => db.users.toArray(), []);
 
-  const linkedUsername = (userId?: string) => {
+  const linkedAccountInfo = (userId?: string) => {
     if (!userId) return null;
-    return loginAccounts?.find(u => String(u.id) === String(userId))?.username || null;
+    const acc = allLoginAccounts?.find(u => String(u.id) === String(userId));
+    if (!acc) return null;
+    return { username: acc.username, isActive: acc.isActive };
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -123,20 +126,33 @@ export default function StaffPage() {
                 <div className="w-14 h-14 rounded-2xl bg-slate-50 flex items-center justify-center font-black text-primary text-xl uppercase">{s.title.charAt(0)}</div>
                 <div className="flex gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all">
                    <button onClick={() => { setEditing(s.id!); setForm({ ...emptyStaffForm, ...s.data }); setAddingPosition(false); setNewPositionText(''); document.getElementById('hr-modal')?.classList.remove('hidden'); }} className="btn btn-secondary btn-icon" aria-label="Edit profile"><Edit3 size={16}/></button>
-                   <button onClick={async () => { if(confirm('Remove profile? Their past sales stay recorded, but will no longer show up under this professional in Commission reports.')) await db.moduleRecords.delete(s.id!) }} className="btn btn-danger btn-icon" aria-label="Delete profile"><Trash2 size={16}/></button>
+                   <button onClick={async () => { if(confirm('Remove profile? Their past sales stay recorded, but will no longer show up under this professional in Commission reports.')) { await db.moduleRecords.delete(s.id!); await logAction('HR', `Removed profile: ${s.title}`); } }} className="btn btn-danger btn-icon" aria-label="Delete profile"><Trash2 size={16}/></button>
                 </div>
              </div>
              <h3 className="text-lg font-black text-slate-900 tracking-tight uppercase leading-tight mb-1">{s.title}</h3>
              <div className="text-[10px] font-black text-primary uppercase tracking-[0.2em] mb-3">{s.data.position}</div>
-             {linkedUsername(s.data.userId) ? (
-               <div className="flex items-center gap-2 text-[10px] font-bold text-success mb-6">
-                 <Link2 size={12}/> Linked to login: {linkedUsername(s.data.userId)}
-               </div>
-             ) : (
-               <div className="flex items-center gap-2 text-[10px] font-bold text-slate-300 mb-6">
-                 <Link2 size={12}/> No login account linked
-               </div>
-             )}
+             {(() => {
+               const info = linkedAccountInfo(s.data.userId);
+               if (info?.isActive) {
+                 return (
+                   <div className="flex items-center gap-2 text-[10px] font-bold text-success mb-6">
+                     <Link2 size={12}/> Linked to login: {info.username}
+                   </div>
+                 );
+               }
+               if (info && !info.isActive) {
+                 return (
+                   <div className="flex items-center gap-2 text-[10px] font-bold text-amber-500 mb-6">
+                     <Link2 size={12}/> Linked login deactivated: {info.username}
+                   </div>
+                 );
+               }
+               return (
+                 <div className="flex items-center gap-2 text-[10px] font-bold text-slate-300 mb-6">
+                   <Link2 size={12}/> No login account linked
+                 </div>
+               );
+             })()}
              <div className="flex items-center justify-between border-t border-slate-100 pt-4 mt-auto">
                 <div className="flex items-center gap-2 text-slate-400 font-bold text-xs"><Phone size={14}/> {s.data.phone}</div>
                 <span className={`badge ${s.status === 'Active' ? 'badge-success' : 'badge-neutral'}`}>{s.status}</span>
