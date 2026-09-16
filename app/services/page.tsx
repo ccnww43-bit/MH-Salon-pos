@@ -7,7 +7,7 @@ import { Navbar } from '@/components/navbar';
 import { Pagination } from '@/components/pagination';
 import { PermissionGuard } from '@/components/permissionguard';
 import { logAction } from '@/lib/logger';
-import { Plus, Trash2, Scissors, Power, DollarSign, Clock, X, AlertCircle, Check } from 'lucide-react';
+import { Plus, Trash2, Scissors, Power, DollarSign, Clock, X, AlertCircle, Check, Lock } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -87,7 +87,7 @@ export default function ServicesPage() {
     const now = new Date();
     await db.services.add({
       name: form.name,
-      price: parseFloat(form.price),
+      price: Math.max(0, parseFloat(form.price) || 0),
       category: form.category,
       duration: parseInt(form.duration),
       isActive: true,
@@ -120,6 +120,20 @@ export default function ServicesPage() {
   };
 
   return (
+    <PermissionGuard
+      permission="view_services"
+      fallback={
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-5">
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-premium text-center max-w-lg">
+            <div className="w-20 h-20 rounded-lg bg-red-50 text-red-500 flex items-center justify-center mb-8 mx-auto">
+              <Lock size={40} />
+            </div>
+            <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tighter mb-3">Access Restricted</h2>
+            <p className="text-slate-500 font-bold text-sm">You don't have permission to view this page. Contact an administrator if you believe this is a mistake.</p>
+          </div>
+        </div>
+      }
+    >
     <div className="min-h-screen bg-slate-50">
       <Navbar />
 
@@ -143,7 +157,7 @@ export default function ServicesPage() {
               <div className="relative">
                 <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
                 <input
-                  type="number" placeholder="Price" required
+                  type="number" min="0" placeholder="Price" required
                   className="pl-8 pr-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm font-semibold text-slate-900 w-28 focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white outline-none transition-all"
                   value={form.price} onChange={e => setForm({ ...form, price: e.target.value })}
                 />
@@ -192,10 +206,12 @@ export default function ServicesPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">{s.category}</span>
+                    <PermissionGuard permission="manage_services">
                     <div className="flex gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                       <button onClick={() => toggle(s.id!, s.isActive, s.name)} className="p-1.5 rounded-lg bg-slate-100 text-slate-400 hover:text-primary transition-colors"><Power size={14} /></button>
                       <button onClick={() => handleDelete(s.id!, s.name)} className="p-1.5 rounded-lg bg-red-50 text-red-300 hover:text-red-500 transition-colors"><Trash2 size={14} /></button>
                     </div>
+                    </PermissionGuard>
                   </div>
                 </div>
                 <h3 className="font-bold text-slate-900 text-sm leading-snug mb-3 min-h-[2.5em]">{s.name}</h3>
@@ -233,5 +249,6 @@ export default function ServicesPage() {
         </div>
       </div>
     </div>
+    </PermissionGuard>
   );
 }
