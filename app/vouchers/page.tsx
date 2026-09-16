@@ -14,14 +14,25 @@ export default function VouchersPage() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    const code = form.code || `VCH-${Math.random().toString(36).toUpperCase().substr(2, 6)}`;
-    
+    const value = Number(form.amount);
+    if (!value || value <= 0) {
+      alert("Enter a voucher value greater than 0.");
+      return;
+    }
+    const code = (form.code || `VCH-${Math.random().toString(36).toUpperCase().substr(2, 6)}`).trim().toUpperCase();
+
+    const duplicate = vouchers?.find(v => (v.title || '').trim().toUpperCase() === code);
+    if (duplicate) {
+      alert(`Voucher code "${code}" is already in use. Choose a different code.`);
+      return;
+    }
+
     await db.moduleRecords.add({
       module: 'voucher',
       title: code,
       status: 'Active',
-      amount: Number(form.amount),
-      data: { ...form, code, balance: Number(form.amount) },
+      amount: value,
+      data: { ...form, code, balance: value },
       createdAt: new Date(),
       updatedAt: new Date()
     });

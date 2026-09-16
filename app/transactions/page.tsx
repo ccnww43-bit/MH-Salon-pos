@@ -222,6 +222,33 @@ function TransactionsPageInner() {
     } as any);
   };
 
+  const reverseLoyaltyPointsForSale = async (sale: Sale, actionLabel: 'Void' | 'Refund') => {
+    const earnedRecord = await db.moduleRecords
+      .where('module').equals('loyalty')
+      .filter((r: any) => r.customerId === sale.customerId && r.data?.reason === `Earned on sale ${sale.receiptNumber}`)
+      .first();
+
+    if (!earnedRecord || !earnedRecord.amount) return;
+
+    const customer = await db.customers.get(sale.customerId);
+    if (!customer) return;
+
+    const previousBalance = customer.loyaltyPoints || 0;
+    const newBalance = Math.max(0, previousBalance - earnedRecord.amount);
+
+    await db.customers.update(sale.customerId, { loyaltyPoints: newBalance, updatedAt: new Date() });
+    await db.moduleRecords.add({
+      module: 'loyalty',
+      title: 'Points Reversed',
+      status: 'Reversed',
+      customerId: sale.customerId,
+      amount: -(previousBalance - newBalance),
+      data: { reason: `${actionLabel} of sale ${sale.receiptNumber}`, previousBalance, newBalance },
+      createdAt: new Date(),
+      updatedAt: new Date()
+    } as any);
+  };
+
   const handleVoid = async () => {
     if (!selectedSale || !actionReason) return;
     if (!confirm("STRICT VERIFICATION: Invalidate this invoice permanently?")) return;
@@ -237,10 +264,11 @@ function TransactionsPageInner() {
 
       await restoreInventoryForSale(selectedSale, 'Void', actionReason);
       await restoreCreditAndVouchersForSale(selectedSale);
+      await reverseLoyaltyPointsForSale(selectedSale, 'Void');
       await reverseCashMovementForSale(selectedSale, 'Void', actionReason);
     });
 
-    await logAction('Void', `Voided ${selectedSale.receiptNumber}. Reason: ${actionReason}. Inventory restored for any product items. Customer Credit/Voucher balances restored if used.`);
+    await logAction('Void', `Voided ${selectedSale.receiptNumber}. Reason: ${actionReason}. Inventory restored for any product items. Customer Credit/Voucher balances restored if used. Loyalty points earned on this sale reversed if any.`);
     setSelectedSale(null); setActionReason("");
   };
 
@@ -294,6 +322,24 @@ function TransactionsPageInner() {
         status: newStatus,
         updatedAt: new Date()
       });
+
+      if (paymentMethod === 'Cash' && amount > 0) {
+        const openDrawers = await db.cashDrawers.where('status').equals('Open').toArray();
+        const openDrawer = [...openDrawers].sort(
+          (a: any, b: any) => new Date(b.openedAt).getTime() - new Date(a.openedAt).getTime()
+        )[0];
+
+        if (openDrawer) {
+          await db.cashMovements.add({
+            drawerId: openDrawer.id,
+            type: 'IN',
+            amount,
+            reason: `Payment recorded on ${selectedSale.receiptNumber}`,
+            date: new Date(),
+            username: localStorage.getItem('username') || 'System'
+          } as any);
+        }
+      }
 
       await logAction(
         "Payment Recorded",
@@ -381,10 +427,11 @@ function TransactionsPageInner() {
 
       await restoreInventoryForSale(selectedSale, 'Refund', actionReason);
       await restoreCreditAndVouchersForSale(selectedSale);
+      await reverseLoyaltyPointsForSale(selectedSale, 'Refund');
       await reverseCashMovementForSale(selectedSale, 'Refund', actionReason);
     });
 
-    await logAction('Refund', `Refunded ${selectedSale.receiptNumber}. Reason: ${actionReason}. Inventory restored for any product items. Customer Credit/Voucher balances restored if used.`);
+    await logAction('Refund', `Refunded ${selectedSale.receiptNumber}. Reason: ${actionReason}. Inventory restored for any product items. Customer Credit/Voucher balances restored if used. Loyalty points earned on this sale reversed if any.`);
     setSelectedSale(null); setActionReason("");
   };
 

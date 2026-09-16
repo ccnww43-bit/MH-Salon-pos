@@ -109,6 +109,13 @@ export default function BookingsPage() {
   const save = async (e: FormEvent) => {
     e.preventDefault();
 
+    if (editing && !hasPermission(role, "edit_bookings")) {
+      return alert("You don't have permission to modify bookings.");
+    }
+    if (!editing && !hasPermission(role, "create_bookings")) {
+      return alert("You don't have permission to create bookings.");
+    }
+
     if (!form.customerId || !form.serviceIds.length) {
       return alert(
         "Select a customer and at least one service."
@@ -235,6 +242,9 @@ export default function BookingsPage() {
     s: (typeof statuses)[number]
   ) => {
     if (!b.id) return;
+    if (!hasPermission(role, "manage_booking_status")) {
+      return alert("You don't have permission to change booking status.");
+    }
 
     await db.bookings.update(b.id, {
       status: s,
@@ -293,6 +303,7 @@ export default function BookingsPage() {
         </p>
       </div>
 
+      {(hasPermission(role, "create_bookings") || hasPermission(role, "edit_bookings")) && (
       <form
         onSubmit={save}
         className="bg-white border rounded-2xl p-5 grid md:grid-cols-4 gap-4"
@@ -506,6 +517,7 @@ export default function BookingsPage() {
           )}
         </div>
       </form>
+      )}
 
       <div className="flex items-center gap-3">
         <input
@@ -554,27 +566,33 @@ export default function BookingsPage() {
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                <select
-                  value={b.status}
-                  onChange={(e) =>
-                    status(
-                      b,
-                      e.target.value as (typeof statuses)[number]
-                    )
-                  }
-                  className="border rounded-lg p-2"
-                >
-                  {statuses.map((s) => (
-                    <option key={s}>{s}</option>
-                  ))}
-                </select>
+                {hasPermission(role, "manage_booking_status") ? (
+                  <select
+                    value={b.status}
+                    onChange={(e) =>
+                      status(
+                        b,
+                        e.target.value as (typeof statuses)[number]
+                      )
+                    }
+                    className="border rounded-lg p-2"
+                  >
+                    {statuses.map((s) => (
+                      <option key={s}>{s}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <span className="border rounded-lg p-2 text-sm text-gray-500">{b.status}</span>
+                )}
 
-                <button
-                  onClick={() => edit(b)}
-                  className="border rounded-lg px-3 py-2"
-                >
-                  Edit
-                </button>
+                {hasPermission(role, "edit_bookings") && (
+                  <button
+                    onClick={() => edit(b)}
+                    className="border rounded-lg px-3 py-2"
+                  >
+                    Edit
+                  </button>
+                )}
               </div>
             </div>
           ))

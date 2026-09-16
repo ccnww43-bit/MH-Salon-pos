@@ -38,6 +38,15 @@ export default function UsersManagementPage() {
     }
 
     if (editing) {
+      const originalUser = users?.find(u => u.id === editing);
+      if (originalUser?.role === 'Admin' && rest.role !== 'Admin') {
+        const otherActiveAdmins = users?.filter(u => u.role === 'Admin' && u.isActive && u.id !== editing).length || 0;
+        if (otherActiveAdmins === 0) {
+          alert("You can't remove Admin access from the last remaining Admin account.");
+          return;
+        }
+      }
+
       const update: Partial<User> = { ...rest, updatedAt: now };
 
       if (typedPassword) {

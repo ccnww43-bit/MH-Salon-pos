@@ -168,7 +168,7 @@ export default function MembershipsPage() {
                    </div>
                    <div className="space-y-2">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Auto-Discount (%)</label>
-                      <input type="number" required className="w-full p-5 rounded-3xl bg-slate-50 border border-slate-100 font-black text-slate-900 outline-none" value={form.discount} onChange={e => setForm({...form, discount: e.target.value})} />
+                      <input type="number" min="0" max="100" required className="w-full p-5 rounded-3xl bg-slate-50 border border-slate-100 font-black text-slate-900 outline-none" value={form.discount} onChange={e => setForm({...form, discount: e.target.value})} />
                    </div>
                  </div>
                  <div className="space-y-2">

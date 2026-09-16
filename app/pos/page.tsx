@@ -124,7 +124,7 @@ export default function POSPage() {
 
   const currency = settings?.[0]?.currency || "KSh";
   const taxEnabled = !!settings?.[0]?.taxEnabled;
-  const taxRate = settings?.[0]?.taxRate || 0;
+  const taxRate = Math.max(0, settings?.[0]?.taxRate || 0);
 
   const subtotal = cart.reduce((sum, item) => sum + item.total, 0);
 
@@ -142,14 +142,16 @@ export default function POSPage() {
         (!m.data?.expiry || m.data.expiry >= today)
       ) || null
     : null;
-  const membershipDiscountPercent = activeMembership ? Number(activeMembership.data?.discount) || 0 : 0;
+  const membershipDiscountPercent = activeMembership
+    ? Math.min(100, Math.max(0, Number(activeMembership.data?.discount) || 0))
+    : 0;
   const membershipDiscountAmount = Math.min(subtotal, (subtotal * membershipDiscountPercent) / 100);
 
   const totalDiscount = Math.min(subtotal, discount + membershipDiscountAmount);
   const taxableAmount = Math.max(0, subtotal - totalDiscount);
   const tax = taxEnabled ? (taxableAmount * taxRate) / 100 : 0;
   const total = taxableAmount + tax + tip;
-  const paid = payments.reduce((sum, p) => sum + p.amount, 0);
+  const paid = payments.reduce((sum, p) => sum + (Number.isFinite(p.amount) ? p.amount : 0), 0);
   const balance = total - paid;
 
   // Keep the manual discount consistent if the cart shrinks below the current discount amount
@@ -312,6 +314,24 @@ export default function POSPage() {
       const current = customers?.find(c => c.id === selectedCustomer.id)?.creditBalance ?? selectedCustomer.creditBalance ?? 0;
       await db.customers.update(selectedCustomer.id, { creditBalance: current + amount, updatedAt: new Date() });
 
+      if (creditTopUpMethod === 'Cash') {
+        const openDrawers = await db.cashDrawers.where('status').equals('Open').toArray();
+        const openDrawer = [...openDrawers].sort(
+          (a: any, b: any) => new Date(b.openedAt).getTime() - new Date(a.openedAt).getTime()
+        )[0];
+
+        if (openDrawer) {
+          await db.cashMovements.add({
+            drawerId: openDrawer.id,
+            type: 'IN',
+            amount,
+            reason: `Credit top-up ${inv} for ${selectedCustomer.name}`,
+            date: new Date(),
+            username: localStorage.getItem('username') || 'System'
+          } as any);
+        }
+      }
+
       await logAction("Customer Credit", `Recorded ${currency} ${amount.toLocaleString()} advance payment / credit top-up for ${selectedCustomer.name} via ${creditTopUpMethod}.`);
 
       setShowCreditModal(false);
@@ -416,7 +436,7 @@ export default function POSPage() {
     if (type === 'Service') {
       const promo = getActivePromotion(item.id!);
       if (promo) {
-        const pct = Number(promo.amount) || 0;
+        const pct = Math.min(100, Math.max(0, Number(promo.amount) || 0));
         unitPrice = Math.max(0, basePrice - (basePrice * pct) / 100);
         lineDiscount = basePrice - unitPrice;
         displayName = `${item.name} (Promo -${pct}%)`;
@@ -497,6 +517,15 @@ export default function POSPage() {
   const handleCheckout = async () => {
     if (!selectedCustomer || cart.length === 0) return alert("Identify client and add items to proceed.");
 
+    for (const item of cart) {
+      if (item.type !== 'Product' || !item.productId) continue;
+      const prod = inventory?.find(p => p.id === item.productId);
+      const available = prod?.currentStock ?? 0;
+      if (item.quantity > available) {
+        return alert(`Only ${available} of "${item.name}" in stock — reduce the quantity before checking out.`);
+      }
+    }
+
     // Every Service line must have a specialist attached so commission can
     // attach to the right person — Product lines stay optional.
     const missingSpecialist = cart.find(i => i.type === 'Service' && !i.staffId);
@@ -526,6 +555,13 @@ export default function POSPage() {
 
     const voucherCheck = await resolveVoucherUsage();
     if (voucherCheck.error) return alert(voucherCheck.error);
+
+    if (balance > 0) {
+      const label = paid <= 0 ? "Unpaid" : "Partially Paid";
+      if (!confirm(`No full payment has been entered. This sale will be recorded as ${label} with a balance of ${currency} ${balance.toLocaleString()} due. Continue?`)) {
+        return;
+      }
+    }
 
     setProcessing(true);
     const inv = `INV-${Date.now().toString().slice(-8).toUpperCase()}`;
@@ -743,7 +779,8 @@ export default function POSPage() {
               {catalog.map(item => {
                 const promo = tab === 'Services' ? getActivePromotion(item.id!) : null;
                 const basePrice = tab === 'Services' ? (item as Service).price : (item as InventoryItem).sellingPrice;
-                const promoPrice = promo ? Math.max(0, basePrice - (basePrice * (Number(promo.amount) || 0)) / 100) : null;
+                const promoPct = promo ? Math.min(100, Math.max(0, Number(promo.amount) || 0)) : 0;
+                const promoPrice = promo ? Math.max(0, basePrice - (basePrice * promoPct) / 100) : null;
                 const style = categoryStyle(item.category);
 
                 return (
@@ -765,7 +802,7 @@ export default function POSPage() {
                         <span className="text-base font-black text-slate-900">{currency} {basePrice.toLocaleString()}</span>
                       )}
                       {promo && (
-                        <span className="text-[10px] font-bold text-white bg-primary px-1.5 py-0.5 rounded-md shadow-glow-primary">-{promo.amount}%</span>
+                        <span className="text-[10px] font-bold text-white bg-primary px-1.5 py-0.5 rounded-md shadow-glow-primary">-{promoPct}%</span>
                       )}
                     </div>
                     {tab === 'Products' && (() => {

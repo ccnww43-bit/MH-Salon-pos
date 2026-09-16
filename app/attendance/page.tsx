@@ -20,7 +20,12 @@ export default function AttendancePage() {
   const [currentDateLabel, setCurrentDateLabel] = useState("");
 
   const staff = useLiveQuery(
-    () => db.users.filter((u) => u.isActive).toArray(),
+    () =>
+      db.moduleRecords
+        .where("module")
+        .equals("staff")
+        .and((s: any) => s.status === "Active")
+        .toArray(),
     []
   );
 
@@ -124,16 +129,16 @@ export default function AttendancePage() {
               >
                 <div className="flex items-center gap-5">
                   <div className="w-16 h-16 rounded-lg bg-slate-50 flex items-center justify-center font-black text-primary text-xl uppercase group-hover:bg-primary group-hover:text-white transition-all shadow-sm leading-none">
-                    {s.username.charAt(0)}
+                    {s.title.charAt(0)}
                   </div>
 
                   <div>
                     <div className="font-black text-slate-900 text-xl tracking-tighter leading-none mb-1">
-                      {s.username}
+                      {s.title}
                     </div>
 
                     <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                      {s.role}
+                      {s.data?.position || "Staff"}
                     </div>
                   </div>
                 </div>
@@ -141,7 +146,7 @@ export default function AttendancePage() {
                 <div className="flex gap-2">
                   <button
                     onClick={() =>
-                      handleAction(s.id!, s.username, "IN")
+                      handleAction(s.id!, s.title, "IN")
                     }
                     className="p-5 rounded-2xl bg-success/5 text-success hover:bg-success hover:text-white transition-all active-click shadow-sm"
                   >
@@ -150,7 +155,7 @@ export default function AttendancePage() {
 
                   <button
                     onClick={() =>
-                      handleAction(s.id!, s.username, "OUT")
+                      handleAction(s.id!, s.title, "OUT")
                     }
                     className="p-5 rounded-2xl bg-danger/5 text-danger hover:bg-danger hover:text-white transition-all active-click shadow-sm"
                   >

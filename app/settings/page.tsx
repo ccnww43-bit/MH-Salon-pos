@@ -298,7 +298,7 @@ export default function SettingsPage() {
             <h2 className="text-2xl font-black text-slate-900 uppercase flex items-center gap-4"><DollarSign className="text-primary"/> Financials</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                <input required className="w-full p-6 rounded-4xl bg-slate-50 border border-slate-100 font-black outline-none" value={form.currency} onChange={e => setForm({...form, currency: e.target.value})} placeholder="Currency (e.g. KSh)" />
-               <input type="number" className="w-full p-6 rounded-4xl bg-slate-50 border border-slate-100 font-black outline-none" value={form.taxRate} onChange={e => setForm({...form, taxRate: Number(e.target.value)})} placeholder="Tax Rate %" />
+               <input type="number" min="0" className="w-full p-6 rounded-4xl bg-slate-50 border border-slate-100 font-black outline-none" value={form.taxRate} onChange={e => setForm({...form, taxRate: Number(e.target.value)})} placeholder="Tax Rate %" />
             </div>
             <div className="flex items-center justify-between bg-slate-50 border border-slate-100 rounded-4xl p-6">
                <div>
