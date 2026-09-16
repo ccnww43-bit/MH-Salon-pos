@@ -7,7 +7,7 @@ import PermissionGuard from "@/components/permissionguard";
 import { Navbar } from "@/components/navbar";
 import { Pagination } from "@/components/pagination";
 import { logAction } from "@/lib/logger";
-import { X, Edit3, Trash2 } from "lucide-react";
+import { X, Edit3, Trash2, Power } from "lucide-react";
 
 interface InventoryItem {
   id: number;
@@ -24,6 +24,7 @@ interface InventoryItem {
   minimumStock: number;
   dateReceived: string;
   expiryDate: string;
+  isActive: boolean;
 }
 
 const emptyForm = {
@@ -111,6 +112,7 @@ export default function InventoryPage() {
         minimumStock: Number(item.minimumStock || 0),
         dateReceived: item.dateReceived || "",
         expiryDate: item.expiryDate || "",
+        isActive: item.isActive !== false,
       })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [rawInventory, suppliers]
@@ -178,8 +180,8 @@ export default function InventoryPage() {
       return;
     }
 
-    const costPrice = Number(form.costPrice) || 0;
-    const sellingPrice = Number(form.sellingPrice) || 0;
+    const costPrice = Math.max(0, Number(form.costPrice) || 0);
+    const sellingPrice = Math.max(0, Number(form.sellingPrice) || 0);
     const minimumStock = Number(form.minimumStock) || 0;
 
     if (minimumStock < 0) {
@@ -272,6 +274,25 @@ export default function InventoryPage() {
   };
 
   const handleDeleteProduct = async (item: InventoryItem) => {
+    // A product with any movement history (stock received, sold, adjusted,
+    // returned) is referenced elsewhere by ID — Inventory Movements and
+    // Transactions void/refund both look products up live. Deleting it would
+    // make old movements show "Unknown Product" and would make a future
+    // void/refund on a sale of this product silently fail to restore stock.
+    // Mark it Discontinued instead so history stays intact and it drops out
+    // of the POS catalog (POS only shows isActive items).
+    const movementCount = await db.inventoryMovements
+      .where("productId")
+      .equals(item.id)
+      .count();
+
+    if (movementCount > 0) {
+      alert(
+        `"${item.name}" has ${movementCount} recorded stock movement${movementCount === 1 ? '' : 's'} (received, sold, adjusted, or returned), so it can't be deleted without breaking that history. Use the power icon to mark it Discontinued instead — it will disappear from POS but its history stays intact.`
+      );
+      return;
+    }
+
     if (!confirm(`Delete "${item.name}"? This cannot be undone.`)) return;
 
     try {
@@ -281,6 +302,17 @@ export default function InventoryPage() {
     } catch (error) {
       console.error("Failed to delete product:", error);
     }
+  };
+
+  const toggleActive = async (item: InventoryItem) => {
+    await db.inventory.update(item.id, {
+      isActive: !item.isActive,
+      updatedAt: new Date(),
+    });
+    await logAction(
+      "Inventory",
+      `${item.isActive ? "Discontinued" : "Reactivated"} product: ${item.name}`
+    );
   };
 
   const filteredItems = useMemo(() => {
@@ -400,7 +432,14 @@ export default function InventoryPage() {
                         key={item.id}
                         className="border-b last:border-0"
                       >
-                        <td className="p-4 font-medium">{item.name}</td>
+                        <td className="p-4 font-medium">
+                          {item.name}
+                          {!item.isActive && (
+                            <span className="ml-2 text-[10px] font-bold uppercase tracking-wide text-gray-400 bg-gray-100 px-2 py-0.5 rounded">
+                              Discontinued
+                            </span>
+                          )}
+                        </td>
 
                         <td className="p-4">{item.type}</td>
 
@@ -446,6 +485,13 @@ export default function InventoryPage() {
 
                         <td className="p-4 text-right">
                           <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => toggleActive(item)}
+                              className={`p-2 rounded-lg transition-colors ${item.isActive ? "text-gray-400 hover:bg-gray-100" : "text-green-600 hover:bg-green-50"}`}
+                              title={item.isActive ? "Discontinue product" : "Reactivate product"}
+                            >
+                              <Power size={16} />
+                            </button>
                             <button
                               onClick={() => openEditModal(item)}
                               className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors"
