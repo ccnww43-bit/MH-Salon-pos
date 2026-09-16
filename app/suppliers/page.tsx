@@ -29,6 +29,19 @@ export default function SuppliersPage() {
 
   const count = useLiveQuery(() => db.moduleRecords.where('module').equals('supplier').count()) || 0;
 
+  const handleDelete = async (supplierId: number, name: string) => {
+    const linkedProducts = await db.inventory.where('supplierId').equals(supplierId).count();
+
+    const warning = linkedProducts > 0
+      ? `${linkedProducts} product${linkedProducts === 1 ? '' : 's'} in Inventory ${linkedProducts === 1 ? 'is' : 'are'} linked to "${name}". Deleting this vendor will remove that link — those products will no longer show a supplier. Continue?`
+      : `Purge Vendor?`;
+
+    if (confirm(warning)) {
+      await db.moduleRecords.delete(supplierId);
+      await logAction('Suppliers', `Deleted vendor: ${name}`);
+    }
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     const now = new Date();
@@ -88,7 +101,7 @@ export default function SuppliersPage() {
                 <div className="p-3 bg-primary/5 text-primary rounded-2xl"><Truck size={22}/></div>
                 <div className="flex gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all">
                    <button onClick={() => { setEditing(s.id!); setForm(s.data); document.getElementById('sup-modal')?.classList.remove('hidden'); }} className="btn btn-secondary btn-icon" aria-label="Edit vendor"><Edit3 size={16}/></button>
-                   <button onClick={async () => { if(confirm('Purge Vendor?')) await db.moduleRecords.delete(s.id!) }} className="btn btn-danger btn-icon" aria-label="Delete vendor"><Trash2 size={16}/></button>
+                   <button onClick={() => handleDelete(s.id!, s.title)} className="btn btn-danger btn-icon" aria-label="Delete vendor"><Trash2 size={16}/></button>
                 </div>
              </div>
              <h3 className="text-base font-black text-slate-900 tracking-tight mb-4 uppercase leading-tight">{s.title}</h3>
