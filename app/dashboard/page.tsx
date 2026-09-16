@@ -770,11 +770,15 @@ export default function DashboardPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="text-[9px] font-black uppercase text-emerald-600">
-                      Profit Summary
+                      Estimated Result
                     </div>
 
                     <div className="mt-1 text-[22px] font-black">
                       {money(stats.profit, currency)}
+                    </div>
+
+                    <div className="mt-0.5 text-[9px] font-medium text-emerald-700/70">
+                      Revenue minus logged expenses — not a full P&L
                     </div>
                   </div>
 
