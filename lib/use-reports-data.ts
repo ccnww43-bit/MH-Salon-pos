@@ -12,7 +12,6 @@ export const PAYMENT_METHODS: PaymentMethod[] = [
   "Card",
   "Bank Transfer",
   "Other",
-  "Customer Credit",
   "Voucher",
 ];
 
