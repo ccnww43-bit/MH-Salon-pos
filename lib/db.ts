@@ -56,7 +56,6 @@ export type PaymentMethod =
   | 'Card'
   | 'Bank Transfer'
   | 'Other'
-  | 'Customer Credit'
   | 'Voucher';
 
 export type PaymentStatus =
@@ -64,7 +63,6 @@ export type PaymentStatus =
   | 'Pending'
   | 'Partially Paid'
   | 'Paid'
-  | 'Advance Payment'
   | 'Cancelled';
 
 export type TransactionStatus =
@@ -125,7 +123,6 @@ export interface Customer {
   gender: string;
   dob?: string;
   notes: string;
-  creditBalance: number;
   loyaltyPoints: number;
   isDemo?: boolean;
   createdAt: Date;
