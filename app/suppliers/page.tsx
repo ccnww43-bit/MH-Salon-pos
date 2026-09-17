@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { db } from "@/lib/db";
 import { useLiveQuery } from "dexie-react-hooks";
 import { Navbar } from "@/components/navbar";
@@ -17,6 +17,12 @@ export default function SuppliersPage() {
   const [form, setForm] = useState({ name: '', contactPerson: '', phone: '', email: '', address: '' });
   const [editing, setEditing] = useState<number | null>(null);
 
+  // Reset to page 1 whenever the search changes so the user isn't stranded
+  // on a now out-of-range page — same pattern used on Inventory/Loyalty.
+  useEffect(() => {
+    setPage(1);
+  }, [query]);
+
   const suppliers = useLiveQuery(async () => {
     const q = query.toLowerCase().trim();
     const coll = db.moduleRecords.where('module').equals('supplier');
@@ -27,7 +33,17 @@ export default function SuppliersPage() {
     return await coll.offset((page - 1) * size).limit(size).toArray();
   }, [page, query]);
 
-  const count = useLiveQuery(() => db.moduleRecords.where('module').equals('supplier').count()) || 0;
+  // Total must reflect the active search filter — otherwise Pagination
+  // renders page numbers based on the full unfiltered vendor count while
+  // the list above only ever has the (much smaller) filtered results.
+  const count = useLiveQuery(async () => {
+    const q = query.toLowerCase().trim();
+    if (q) {
+      const all = await db.moduleRecords.where('module').equals('supplier').toArray();
+      return all.filter(r => r.title.toLowerCase().includes(q)).length;
+    }
+    return await db.moduleRecords.where('module').equals('supplier').count();
+  }, [query]) || 0;
 
   const handleDelete = async (supplierId: number, name: string) => {
     const linkedProducts = await db.inventory.where('supplierId').equals(supplierId).count();
