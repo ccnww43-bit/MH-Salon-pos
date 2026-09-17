@@ -99,12 +99,6 @@ export default function DashboardPage() {
       0
     );
 
-    const advanceValue =
-      customers?.reduce(
-        (sum, c) => sum + (c.creditBalance || 0),
-        0
-      ) || 0;
-
     const lowStock = (inventory || []).filter(
       (i) =>
         i.isActive !== false &&
@@ -190,7 +184,6 @@ export default function DashboardPage() {
       servicesCompleted,
       pendingValue,
       pendingCount: pendingPayments.length,
-      advanceValue,
       lowStock,
       activeClients,
       paymentTotals,
@@ -720,11 +713,11 @@ export default function DashboardPage() {
               <div className="mt-3 border-t border-slate-200 pt-3">
                 <div className="flex justify-between">
                   <span className="text-[11px] font-bold text-slate-500">
-                    Advance / Credit
+                    Owed by debtors
                   </span>
 
-                  <span className="text-[12px] font-black text-violet-600">
-                    {money(stats.advanceValue, currency)}
+                  <span className="text-[12px] font-black text-rose-600">
+                    {money(stats.pendingValue, currency)}
                   </span>
                 </div>
               </div>
