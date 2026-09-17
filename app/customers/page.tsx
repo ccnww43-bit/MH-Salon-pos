@@ -7,7 +7,33 @@ import { Navbar } from "@/components/navbar";
 import { Pagination } from "@/components/pagination";
 import { PermissionGuard } from "@/components/permissionguard";
 import { logAction } from "@/lib/logger";
-import { Search, UserPlus, Phone, Mail, Calendar, Trash2, Edit3, UserCheck, AlertCircle, X, Eye, ShoppingBag, Clipboard, CreditCard, Star } from "lucide-react";
+import { Search, UserPlus, Phone, Mail, Calendar, Trash2, Edit3, UserCheck, AlertCircle, X, Eye, ShoppingBag, Clipboard, AlertTriangle, Star } from "lucide-react";
+
+// A customer is a "debtor" whenever they have a Completed sale that isn't
+// fully paid (Sale.balance > 0 — Unpaid or Partially Paid). Rather than
+// storing a separate balance on the Customer record (which could drift out
+// of sync with the sales that actually caused it), this is always computed
+// live from that customer's own sales, so it can never disagree with what
+// Transactions/Reports show.
+function CustomerDebtBadge({ customerId, currency }: { customerId: number; currency: string }) {
+  const outstanding = useLiveQuery(
+    async () => {
+      const sales = await db.sales.where('customerId').equals(customerId).toArray();
+      return sales
+        .filter(s => s.transactionStatus === 'Completed' && s.balance > 0)
+        .reduce((sum, s) => sum + s.balance, 0);
+    },
+    [customerId]
+  );
+
+  if (!outstanding) return null;
+
+  return (
+    <div className="inline-flex items-center gap-1.5 mt-1 px-2 py-1 rounded-full bg-rose-50 text-rose-600 text-[10px] font-black uppercase tracking-widest">
+      <AlertTriangle size={11} /> Debtor • {currency} {outstanding.toLocaleString()}
+    </div>
+  );
+}
 
 export default function CustomersPage() {
   const [page, setPage] = useState(1);
@@ -28,6 +54,12 @@ export default function CustomersPage() {
       : Promise.resolve([] as Sale[]),
     [viewingCustomer?.id]
   );
+
+  // Sum of this customer's own outstanding sale balances — see
+  // CustomerDebtBadge above for why this is computed rather than stored.
+  const viewingCustomerDebt = (customerSales || [])
+    .filter(s => s.transactionStatus === 'Completed' && s.balance > 0)
+    .reduce((sum, s) => sum + s.balance, 0);
 
   const customerBookings = useLiveQuery(
     () => viewingCustomer?.id
@@ -83,14 +115,14 @@ export default function CustomersPage() {
     }
 
     if (editing) {
-      // FIX: Do NOT overwrite creditBalance/loyaltyPoints when editing an existing customer.
+      // FIX: Do NOT overwrite loyaltyPoints when editing an existing customer.
       // Only update the fields actually present in the edit form.
       const data = { ...form, updatedAt: new Date() };
       await db.customers.update(editing, data);
       await logAction('Customer Management', `Updated client: ${form.name}`);
     } else {
-      // New customers correctly start with zeroed credit balance and loyalty points.
-      const data = { ...form, creditBalance: 0, loyaltyPoints: 0, updatedAt: new Date() };
+      // New customers correctly start with zeroed loyalty points.
+      const data = { ...form, loyaltyPoints: 0, updatedAt: new Date() };
       await db.customers.add({ ...data, createdAt: new Date() } as Customer);
       await logAction('Customer Management', `Registered client: ${form.name}`);
     }
@@ -101,7 +133,9 @@ export default function CustomersPage() {
 
   // FIX: Block deletion when the client has related history or a non-zero
   // balance, so Sales/Bookings/Clinical Records never end up pointing at a
-  // deleted customerId, and a credit/loyalty balance can't silently vanish.
+  // deleted customerId, and a loyalty balance can't silently vanish. Any
+  // sale on file (saleCount) already blocks deletion, which covers debtors
+  // (a customer with an unpaid or partially paid sale) as a side effect.
   const handleDelete = async (c: Customer) => {
     const [saleCount, bookingCount, recordCount] = await Promise.all([
       db.sales.where('customerId').equals(c.id!).count(),
@@ -116,8 +150,8 @@ export default function CustomersPage() {
       return;
     }
 
-    if ((c.creditBalance || 0) !== 0 || (c.loyaltyPoints || 0) !== 0) {
-      alert(`Cannot delete ${c.name}: this client still has a credit balance or loyalty points on their account.`);
+    if ((c.loyaltyPoints || 0) !== 0) {
+      alert(`Cannot delete ${c.name}: this client still has loyalty points on their account.`);
       return;
     }
 
@@ -173,6 +207,7 @@ export default function CustomersPage() {
                     <td className="px-4 py-2.5">
                       <div className="font-black text-slate-900 text-lg tracking-tight mb-1">{c.name}</div>
                       <div className="text-[10px] font-black text-slate-300 uppercase tracking-widest">{c.gender} • Joined {new Date(c.createdAt).toLocaleDateString()}</div>
+                      <CustomerDebtBadge customerId={c.id!} currency={currency} />
                     </td>
                     <td className="px-4 py-2.5">
                       <div className="flex items-center gap-3 text-slate-600 font-bold mb-1"><Phone size={14} className="text-primary"/> {c.phone}</div>
@@ -252,9 +287,9 @@ export default function CustomersPage() {
                 <div className="flex items-center gap-2 text-slate-400 text-[10px] font-black uppercase tracking-widest mb-2"><Mail size={12}/> Email</div>
                 <div className="font-black text-slate-900 text-sm truncate">{viewingCustomer.email || 'Not provided'}</div>
               </div>
-              <div className="bg-slate-50/50 border border-slate-100 rounded-xl p-6">
-                <div className="flex items-center gap-2 text-slate-400 text-[10px] font-black uppercase tracking-widest mb-2"><CreditCard size={12}/> Credit balance</div>
-                <div className="font-black text-slate-900 text-sm">{currency} {(viewingCustomer.creditBalance || 0).toLocaleString()}</div>
+              <div className={`bg-slate-50/50 border border-slate-100 rounded-xl p-6 ${viewingCustomerDebt > 0 ? 'ring-1 ring-rose-200' : ''}`}>
+                <div className={`flex items-center gap-2 text-[10px] font-black uppercase tracking-widest mb-2 ${viewingCustomerDebt > 0 ? 'text-rose-500' : 'text-slate-400'}`}><AlertTriangle size={12}/> {viewingCustomerDebt > 0 ? 'Debtor — owes' : 'Outstanding balance'}</div>
+                <div className={`font-black text-sm ${viewingCustomerDebt > 0 ? 'text-rose-600' : 'text-slate-900'}`}>{currency} {viewingCustomerDebt.toLocaleString()}</div>
               </div>
               <div className="bg-slate-50/50 border border-slate-100 rounded-xl p-6">
                 <div className="flex items-center gap-2 text-slate-400 text-[10px] font-black uppercase tracking-widest mb-2"><Star size={12}/> Loyalty points</div>
