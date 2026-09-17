@@ -1,12 +1,13 @@
 "use client";
 
 import React, { useState } from "react";
-import { db } from "@/lib/db";
+import { db, Customer } from "@/lib/db";
 import { useLiveQuery } from "dexie-react-hooks";
 import { Navbar } from "@/components/navbar";
 import { ShieldCheck, Plus, Search, UserCheck, Calendar, X, Trash2, Award, Zap, Lock, Check } from "lucide-react";
 import { logAction } from "@/lib/logger";
 import { PermissionGuard } from "@/components/permissionguard";
+import { CustomerQuickAdd } from "@/components/customer-quick-add";
 
 const DEFAULT_PLANS = ['Gold VIP', 'Platinum Elite', 'Standard Member'];
 
@@ -19,6 +20,16 @@ export default function MembershipsPage() {
   const [form, setForm] = useState({ customerId: '', plan: 'Gold VIP', discount: '10', expiry: '' });
   const [addingPlan, setAddingPlan] = useState(false);
   const [newPlanText, setNewPlanText] = useState('');
+
+  // Workflow-audit fix: lets staff register a walk-in customer without
+  // leaving the enrollment form. `customers` above is a live query, so the
+  // new record shows up in the dropdown automatically once saved — this
+  // handler just selects it and closes the quick-add modal.
+  const [showQuickAddCustomer, setShowQuickAddCustomer] = useState(false);
+  const handleCustomerCreated = (c: Customer) => {
+    setForm(f => ({ ...f, customerId: String(c.id) }));
+    setShowQuickAddCustomer(false);
+  };
 
   // Custom plans saved from this page, on top of the 3 built-in defaults —
   // so "Add new plan" persists and shows up for every enrollment afterwards.
@@ -136,10 +147,20 @@ export default function MembershipsPage() {
               <form onSubmit={handleCreate} className="space-y-6">
                  <div className="space-y-2">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Choose Client</label>
-                    <select required className="w-full p-6 rounded-4xl bg-slate-50 border border-slate-100 font-black text-slate-900 outline-none" value={form.customerId} onChange={e => setForm({...form, customerId: e.target.value})}>
-                       <option value="">Select Member</option>
-                       {customers?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    </select>
+                    <div className="flex items-center gap-2">
+                      <select required className="w-full p-6 rounded-4xl bg-slate-50 border border-slate-100 font-black text-slate-900 outline-none" value={form.customerId} onChange={e => setForm({...form, customerId: e.target.value})}>
+                         <option value="">Select Member</option>
+                         {customers?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => setShowQuickAddCustomer(true)}
+                        className="shrink-0 px-5 py-6 rounded-4xl bg-slate-50 border border-slate-100 font-black text-primary text-xs whitespace-nowrap"
+                        title="Register a new customer without leaving this form"
+                      >
+                        + New
+                      </button>
+                    </div>
                  </div>
                  <div className="grid grid-cols-2 gap-6">
                    <div className="space-y-2">
@@ -181,6 +202,12 @@ export default function MembershipsPage() {
         </div>
       </div>
     </div>
+
+    <CustomerQuickAdd
+      open={showQuickAddCustomer}
+      onClose={() => setShowQuickAddCustomer(false)}
+      onCreated={handleCustomerCreated}
+    />
     </PermissionGuard>
   );
 }
