@@ -7,16 +7,26 @@ import { Navbar } from "@/components/navbar";
 import { WalletCards, TrendingUp, Target, Plus, Search, User, Briefcase, Trash2, X, ChevronRight, Calendar, Activity, Award, Lock } from "lucide-react";
 import { logAction } from "@/lib/logger";
 import { PermissionGuard } from "@/components/permissionguard";
+import { StaffQuickAdd } from "@/components/staff-quick-add";
+import type { ModuleRecord } from "@/lib/db";
+
+const EMPTY_RULE_FORM = { staffId: '', rate: '' };
 
 export default function CommissionsPage() {
-  const staff = useLiveQuery(() => db.moduleRecords.where('module').equals('staff').and(s => s.status === 'Active').toArray(), []);
+  // Pulls every staff profile, active or not, so a rule can be set up for
+  // anyone in the directory — not just people currently marked Active.
+  const staff = useLiveQuery(() => db.moduleRecords.where('module').equals('staff').toArray(), []);
   const services = useLiveQuery(() => db.services.filter(s => s.isActive).toArray(), []);
   const rules = useLiveQuery(() => db.moduleRecords.where('module').equals('commission').toArray(), []);
   const sales = useLiveQuery(() => db.sales.toArray(), []);
   const settings = useLiveQuery(() => db.settings.toArray(), []);
   const currency = settings?.[0]?.currency || "KSh";
 
-  const [form, setForm] = useState({ name: '', staffId: '', type: 'Percentage', rate: '', target: '', status: 'Active' });
+  // Simple rule form: pick a staff member (or leave it for "All Staff"),
+  // choose a commission percentage. Calculation type is always Percentage
+  // here and there's no separate rule name or target to fill in.
+  const [form, setForm] = useState(EMPTY_RULE_FORM);
+  const [showQuickAddStaff, setShowQuickAddStaff] = useState(false);
 
   // Date range for the commission calculation below (defaults to no filter = all-time)
   const [start, setStart] = useState("");
@@ -25,20 +35,26 @@ export default function CommissionsPage() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     const staffMember = staff?.find(s => String(s.id) === form.staffId);
-    
+    const staffName = staffMember?.title || 'All Staff';
+
     await db.moduleRecords.add({
       module: 'commission',
-      title: form.name,
-      status: form.status,
-      staffId: Number(form.staffId),
-      data: { ...form, staffName: staffMember?.title || 'All Staff' },
+      title: `${staffName} — ${form.rate}%`,
+      status: 'Active',
+      staffId: form.staffId ? Number(form.staffId) : undefined,
+      data: { type: 'Percentage', rate: form.rate, staffName },
       createdAt: new Date(),
       updatedAt: new Date()
     });
 
-    await logAction('Commission', `Configured rule: ${form.name} for ${staffMember?.title || 'All'}`);
-    setForm({ name: '', staffId: '', type: 'Percentage', rate: '', target: '', status: 'Active' });
+    await logAction('Commission', `Configured rule: ${form.rate}% for ${staffName}`);
+    setForm(EMPTY_RULE_FORM);
     document.getElementById('comm-modal')?.classList.add('hidden');
+  };
+
+  const handleStaffCreated = (newStaff: ModuleRecord) => {
+    setForm(f => ({ ...f, staffId: String(newStaff.id) }));
+    setShowQuickAddStaff(false);
   };
 
   // Real commission calculation: walk every Completed sale in the selected
@@ -280,33 +296,25 @@ export default function CommissionsPage() {
               <h2 className="text-xl font-black text-slate-900 tracking-tighter mb-10">COMMISSION RULE</h2>
               <form onSubmit={handleSave} className="space-y-6">
                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Rule Identity Name</label>
-                    <input required className="w-full p-6 rounded-4xl bg-slate-50 border border-slate-100 font-black text-slate-900 outline-none focus:ring-8 focus:ring-primary/5" value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder="e.g. Senior Stylist Bonus" />
-                 </div>
-                 <div className="grid grid-cols-2 gap-6">
-                   <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Applicable Staff</label>
-                      <select required className="w-full p-5 rounded-3xl bg-slate-50 border border-slate-100 font-black text-slate-900 outline-none" value={form.staffId} onChange={e => setForm({...form, staffId: e.target.value})}>
-                         <option value="">All Active Staff</option>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Staff</label>
+                    <div className="flex gap-2">
+                      <select className="w-full p-5 rounded-3xl bg-slate-50 border border-slate-100 font-black text-slate-900 outline-none" value={form.staffId} onChange={e => setForm({...form, staffId: e.target.value})}>
+                         <option value="">All Staff</option>
                          {staff?.map(s => <option key={s.id} value={s.id}>{s.title}</option>)}
                       </select>
-                   </div>
-                   <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Calculation Type</label>
-                      <select className="w-full p-5 rounded-3xl bg-slate-50 border border-slate-100 font-black text-slate-900 outline-none" value={form.type} onChange={e => setForm({...form, type: e.target.value})}>
-                         <option>Percentage</option><option>Fixed Amount</option>
-                      </select>
-                   </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowQuickAddStaff(true)}
+                        className="shrink-0 btn btn-secondary"
+                        title="Add a new staff member without leaving this form"
+                      >
+                        + New
+                      </button>
+                    </div>
                  </div>
-                 <div className="grid grid-cols-2 gap-6">
-                   <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Rate Value{form.type === 'Fixed Amount' ? ` (${currency} per item)` : ' (%)'}</label>
-                      <input type="number" required className="w-full p-5 rounded-3xl bg-slate-50 border border-slate-100 font-black text-slate-900 outline-none" value={form.rate} onChange={e => setForm({...form, rate: e.target.value})} />
-                   </div>
-                   <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Monthly Sales Target (Optional)</label>
-                      <input type="number" className="w-full p-5 rounded-3xl bg-slate-50 border border-slate-100 font-black text-slate-900 outline-none" value={form.target} onChange={e => setForm({...form, target: e.target.value})} />
-                   </div>
+                 <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Commission (%)</label>
+                    <input type="number" min="0" max="100" step="0.1" required className="w-full p-5 rounded-3xl bg-slate-50 border border-slate-100 font-black text-slate-900 outline-none" value={form.rate} onChange={e => setForm({...form, rate: e.target.value})} placeholder="e.g. 10" />
                  </div>
                  <button type="submit" className="w-full bg-primary text-white py-2.5 rounded-xl font-black text-xl shadow-high hover:scale-[1.02] transition-all">ACTIVATE COMMISSION RULE</button>
               </form>
@@ -314,6 +322,12 @@ export default function CommissionsPage() {
         </div>
       </div>
     </div>
+
+    <StaffQuickAdd
+      open={showQuickAddStaff}
+      onClose={() => setShowQuickAddStaff(false)}
+      onCreated={handleStaffCreated}
+    />
     </PermissionGuard>
   );
 }
