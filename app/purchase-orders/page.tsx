@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useState } from "react";
-import { db } from "@/lib/db";
+import { db, ModuleRecord } from "@/lib/db";
 import { useLiveQuery } from "dexie-react-hooks";
 import { Navbar } from "@/components/navbar";
 import { logAction } from "@/lib/logger";
+import { SupplierQuickAdd } from "@/components/supplier-quick-add";
 import { ClipboardList, Plus, PackageCheck, AlertCircle, X, ChevronRight, ShoppingBag, Lock } from "lucide-react";
 import { PermissionGuard } from "@/components/permissionguard";
 
@@ -14,6 +15,16 @@ export default function PurchaseOrdersPage() {
   const orders = useLiveQuery(() => db.moduleRecords.where('module').equals('purchase-order').reverse().toArray(), []);
 
   const [form, setForm] = useState({ supplierId: '', productId: '', quantity: '', cost: '' });
+
+  // Workflow-audit fix: lets staff register a new supplier without leaving
+  // this order. `suppliers` above is a live query, so the new vendor shows
+  // up in the dropdown automatically once saved — this handler just
+  // selects it and closes the quick-add modal.
+  const [showQuickAddSupplier, setShowQuickAddSupplier] = useState(false);
+  const handleSupplierCreated = (s: ModuleRecord) => {
+    setForm(f => ({ ...f, supplierId: String(s.id) }));
+    setShowQuickAddSupplier(false);
+  };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -119,10 +130,20 @@ export default function PurchaseOrdersPage() {
           <form onSubmit={handleCreate} className="space-y-8">
              <div className="space-y-2">
                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-6">1. Target Vendor</label>
-               <select required className="w-full p-6 rounded-4xl border border-slate-100 bg-slate-50 font-black text-slate-900 outline-none appearance-none" value={form.supplierId} onChange={e => setForm({...form, supplierId: e.target.value})}>
-                 <option value="">Authorize Supplier...</option>
-                 {suppliers?.map(s => <option key={s.id} value={s.id}>{s.title}</option>)}
-               </select>
+               <div className="flex gap-2">
+                 <select required className="w-full p-6 rounded-4xl border border-slate-100 bg-slate-50 font-black text-slate-900 outline-none appearance-none" value={form.supplierId} onChange={e => setForm({...form, supplierId: e.target.value})}>
+                   <option value="">Authorize Supplier...</option>
+                   {suppliers?.map(s => <option key={s.id} value={s.id}>{s.title}</option>)}
+                 </select>
+                 <button
+                   type="button"
+                   onClick={() => setShowQuickAddSupplier(true)}
+                   className="shrink-0 btn btn-secondary"
+                   title="Register a new supplier without leaving this order"
+                 >
+                   + New
+                 </button>
+               </div>
              </div>
              <div className="space-y-2">
                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-6">2. Catalog Item</label>
@@ -146,6 +167,12 @@ export default function PurchaseOrdersPage() {
         </div>
       </div>
     </div>
+
+    <SupplierQuickAdd
+      open={showQuickAddSupplier}
+      onClose={() => setShowQuickAddSupplier(false)}
+      onCreated={handleSupplierCreated}
+    />
     </PermissionGuard>
   );
 }
