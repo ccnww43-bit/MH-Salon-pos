@@ -82,7 +82,7 @@ export function ReportFilters({
 
               {data.staffList?.map((staff) => (
                 <option key={staff.id} value={staff.id}>
-                  {staff.username}
+                  {staff.title}
                 </option>
               ))}
             </select>
