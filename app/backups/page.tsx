@@ -6,6 +6,7 @@ import { logAction } from "@/lib/logger";
 import { Navbar } from "@/components/navbar";
 import { PermissionGuard } from "@/components/permissionguard";
 import { seedDemoData, clearDemoData } from "@/lib/seed-demo-data";
+import { isTrainingMode } from "@/lib/app-mode";
 import {
   DatabaseBackup,
   Download,
@@ -25,8 +26,14 @@ export default function BackupsPage() {
   const [demoBusy, setDemoBusy] = useState(false);
   const [demoStatus, setDemoStatus] = useState("");
 
+  // Demo data (and the buttons that load/remove it) must never be usable in
+  // Production — mixing fake customers/bookings/sales into a real salon's
+  // data would corrupt every report and dashboard downstream. Training Mode
+  // has its own separate database, so it's the only safe place for this.
+  const trainingMode = isTrainingMode();
+
   const handleLoadDemoData = async () => {
-    if (demoBusy) return;
+    if (demoBusy || !trainingMode) return;
     setDemoBusy(true);
     setDemoStatus("");
     try {
@@ -42,7 +49,7 @@ export default function BackupsPage() {
   };
 
   const handleRemoveDemoData = async () => {
-    if (demoBusy) return;
+    if (demoBusy || !trainingMode) return;
     if (!confirm("Remove all demo customers, bookings and sales? This cannot be undone.")) return;
     setDemoBusy(true);
     setDemoStatus("");
@@ -485,11 +492,21 @@ export default function BackupsPage() {
           Load sample customers, bookings and sales for a presentation. Remove them again with one click once the demo is done.
         </p>
 
+        {!trainingMode && (
+          <div className="mt-8 flex items-start gap-3 bg-warning/5 border border-warning/10 rounded-lg px-4 py-6">
+            <AlertTriangle size={20} className="text-warning shrink-0" />
+            <p className="text-xs font-bold text-slate-500 leading-relaxed">
+              Demo data tools are disabled in Production to keep fake records out of your real reports. Switch to Training Mode to load or remove demo data.
+            </p>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-10">
           <button
             onClick={handleLoadDemoData}
-            disabled={demoBusy}
-            className="bg-primary text-white py-6 rounded-lg font-black uppercase tracking-widest shadow-high hover:scale-[1.01] active:scale-95 transition-all disabled:opacity-50"
+            disabled={demoBusy || !trainingMode}
+            title={!trainingMode ? "Only available in Training Mode" : undefined}
+            className="bg-primary text-white py-6 rounded-lg font-black uppercase tracking-widest shadow-high hover:scale-[1.01] active:scale-95 transition-all disabled:opacity-50 disabled:hover:scale-100"
           >
             <span className="flex items-center justify-center gap-3">
               <Sparkles size={22} />
@@ -499,8 +516,9 @@ export default function BackupsPage() {
 
           <button
             onClick={handleRemoveDemoData}
-            disabled={demoBusy}
-            className="bg-danger text-white py-6 rounded-lg font-black uppercase tracking-widest shadow-high hover:scale-[1.01] active:scale-95 transition-all disabled:opacity-50"
+            disabled={demoBusy || !trainingMode}
+            title={!trainingMode ? "Only available in Training Mode" : undefined}
+            className="bg-danger text-white py-6 rounded-lg font-black uppercase tracking-widest shadow-high hover:scale-[1.01] active:scale-95 transition-all disabled:opacity-50 disabled:hover:scale-100"
           >
             <span className="flex items-center justify-center gap-3">
               <Eraser size={22} />
