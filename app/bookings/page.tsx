@@ -5,6 +5,7 @@ import { db, Booking, Customer, Service, ModuleRecord } from "@/lib/db";
 import { hasPermission } from "@/lib/permissions";
 import { Pagination } from "@/components/pagination";
 import { Navbar } from "@/components/navbar";
+import { CustomerQuickAdd } from "@/components/customer-quick-add";
 
 const statuses = [
   "Booked",
@@ -26,6 +27,11 @@ export default function BookingsPage() {
     new Date().toISOString().slice(0, 10)
   );
   const [editing, setEditing] = useState<number | null>(null);
+
+  // Workflow-audit fix: lets staff register a walk-in customer without
+  // leaving the booking form. Opens CustomerQuickAdd; the new customer is
+  // auto-selected via handleCustomerCreated below.
+  const [showQuickAddCustomer, setShowQuickAddCustomer] = useState(false);
 
   // Pagination — mirrors the pattern used on the Customers page. The
   // schedule is also now fetched one day at a time (see load()) instead of
@@ -82,6 +88,15 @@ export default function BookingsPage() {
   useEffect(() => {
     setRole(localStorage.getItem("userRole"));
   }, []);
+
+  // Called by CustomerQuickAdd after it saves a new customer: add it to
+  // this page's already-loaded customer list (no full reload needed) and
+  // select it in the booking form, so staff can continue immediately.
+  const handleCustomerCreated = (c: Customer) => {
+    setCustomers((prev) => [...prev, c]);
+    setForm((f) => ({ ...f, customerId: String(c.id) }));
+    setShowQuickAddCustomer(false);
+  };
 
   // Reload whenever the selected date changes, since load() now scopes its
   // query to that date. Also jump back to page 1 so the user isn't
@@ -313,27 +328,38 @@ export default function BookingsPage() {
             Customer
           </label>
 
-          <select
-            value={form.customerId}
-            onChange={(e) =>
-              setForm({
-                ...form,
-                customerId: e.target.value,
-              })
-            }
-            className="w-full border rounded-xl p-3 mt-1"
-          >
-            <option value="">
-              Select customer
-            </option>
-
-            {customers.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}{" "}
-                {c.phone && `— ${c.phone}`}
+          <div className="flex gap-2 mt-1">
+            <select
+              value={form.customerId}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  customerId: e.target.value,
+                })
+              }
+              className="w-full border rounded-xl p-3"
+            >
+              <option value="">
+                Select customer
               </option>
-            ))}
-          </select>
+
+              {customers.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}{" "}
+                  {c.phone && `— ${c.phone}`}
+                </option>
+              ))}
+            </select>
+
+            <button
+              type="button"
+              onClick={() => setShowQuickAddCustomer(true)}
+              className="shrink-0 border rounded-xl px-3 font-bold text-primary whitespace-nowrap"
+              title="Register a new customer without leaving this form"
+            >
+              + New
+            </button>
+          </div>
         </div>
 
         <div>
@@ -606,6 +632,12 @@ export default function BookingsPage() {
         onPageChange={setPage}
       />
     </div>
+
+    <CustomerQuickAdd
+      open={showQuickAddCustomer}
+      onClose={() => setShowQuickAddCustomer(false)}
+      onCreated={handleCustomerCreated}
+    />
     </>
   );
 }
