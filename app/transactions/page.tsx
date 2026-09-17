@@ -158,26 +158,14 @@ function TransactionsPageInner() {
     }
   };
 
-  // Restores any Customer Credit or Voucher balance spent on this sale, so a
-  // void/refund gives back exactly what it took. Mirrors, in reverse, the
-  // deduction logic in app/pos/page.tsx's handleCheckout (creditUsed and
-  // resolveVoucherUsage), so the same fields and matching rules are used.
-  const restoreCreditAndVouchersForSale = async (sale: Sale) => {
-    // Restore Customer Credit spent on this sale
-    const creditUsed = sale.payments
-      .filter(p => p.method === 'Customer Credit')
-      .reduce((sum, p) => sum + p.amount, 0);
-
-    if (creditUsed > 0) {
-      const customer = await db.customers.get(sale.customerId);
-      if (customer) {
-        await db.customers.update(sale.customerId, {
-          creditBalance: (customer.creditBalance || 0) + creditUsed,
-          updatedAt: new Date()
-        });
-      }
-    }
-
+  // Restores any Voucher balance spent on this sale, so a void/refund gives
+  // back exactly what it took. Mirrors, in reverse, the deduction logic in
+  // app/pos/page.tsx's handleCheckout (resolveVoucherUsage), so the same
+  // fields and matching rules are used. Note: setting transactionStatus to
+  // Voided/Refunded (done by the caller) is what clears an unpaid sale's
+  // debt against the customer — Customers/Dashboard/Reports only count a
+  // sale's outstanding balance while it's still "Completed".
+  const restoreVouchersForSale = async (sale: Sale) => {
     // Restore Voucher balance(s) spent on this sale. Multiple payment lines
     // using the same code are combined first, same as resolveVoucherUsage
     // does when the voucher is redeemed.
@@ -280,12 +268,12 @@ function TransactionsPageInner() {
       });
 
       await restoreInventoryForSale(selectedSale, 'Void', actionReason);
-      await restoreCreditAndVouchersForSale(selectedSale);
+      await restoreVouchersForSale(selectedSale);
       await reverseLoyaltyPointsForSale(selectedSale, 'Void');
       await reverseCashMovementForSale(selectedSale, 'Void', actionReason);
     });
 
-    await logAction('Void', `Voided ${selectedSale.receiptNumber}. Reason: ${actionReason}. Inventory restored for any product items. Customer Credit/Voucher balances restored if used. Loyalty points earned on this sale reversed if any.`);
+    await logAction('Void', `Voided ${selectedSale.receiptNumber}. Reason: ${actionReason}. Inventory restored for any product items. Voucher balance restored if used. Loyalty points earned on this sale reversed if any.`);
     setSelectedSale(null); setActionReason("");
   };
 
@@ -443,12 +431,12 @@ function TransactionsPageInner() {
       });
 
       await restoreInventoryForSale(selectedSale, 'Refund', actionReason);
-      await restoreCreditAndVouchersForSale(selectedSale);
+      await restoreVouchersForSale(selectedSale);
       await reverseLoyaltyPointsForSale(selectedSale, 'Refund');
       await reverseCashMovementForSale(selectedSale, 'Refund', actionReason);
     });
 
-    await logAction('Refund', `Refunded ${selectedSale.receiptNumber}. Reason: ${actionReason}. Inventory restored for any product items. Customer Credit/Voucher balances restored if used. Loyalty points earned on this sale reversed if any.`);
+    await logAction('Refund', `Refunded ${selectedSale.receiptNumber}. Reason: ${actionReason}. Inventory restored for any product items. Voucher balance restored if used. Loyalty points earned on this sale reversed if any.`);
     setSelectedSale(null); setActionReason("");
   };
 
