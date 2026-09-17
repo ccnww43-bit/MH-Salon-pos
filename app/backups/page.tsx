@@ -38,8 +38,11 @@ export default function BackupsPage() {
     setDemoStatus("");
     try {
       const result = await seedDemoData();
-      setDemoStatus(`Demo data loaded: ${result.customers} customers, ${result.bookings} bookings, ${result.sales} sales.`);
-      await logAction("Backups", "Loaded demo data for presentation");
+      setDemoStatus(
+        `Demo data loaded across every module: ${result.customers} customers, ${result.staff} staff, ${result.bookings} bookings, ${result.sales} sales, ${result.inventory} products, ${result.suppliers} suppliers, ${result.purchaseOrders} purchase orders, ${result.commissions} commissions, ${result.packages} packages, ${result.memberships} memberships, ${result.vouchers} vouchers, ${result.promotions} promotions, ${result.expenses} expenses, ${result.leave} leave requests, ${result.clinicalRecords} clinical records. ` +
+        `Two extra logins were created for testing — username "demo.supervisor" (Supervisor) and "demo.cashier" (Cashier), both with password "Demo@1234".`
+      );
+      await logAction("Backups", "Loaded full demo dataset for testing");
     } catch (error) {
       console.error(error);
       setDemoStatus("Unable to load demo data.");
@@ -489,7 +492,7 @@ export default function BackupsPage() {
         </h2>
 
         <p className="text-slate-500 font-bold mt-3">
-          Load sample customers, bookings and sales for a presentation. Remove them again with one click once the demo is done.
+          Load a full sample dataset — customers, staff, bookings, sales, inventory, suppliers, expenses, and every other module — for testing. Remove it again with one click when you're done.
         </p>
 
         {!trainingMode && (
