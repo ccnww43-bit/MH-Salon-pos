@@ -89,7 +89,6 @@ export function CustomerQuickAdd({
         gender: form.gender,
         dob: form.dob,
         notes: form.notes.trim(),
-        creditBalance: 0,
         loyaltyPoints: 0,
         createdAt: now,
         updatedAt: now,
