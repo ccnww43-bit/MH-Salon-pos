@@ -352,7 +352,7 @@ export function useReportsData() {
    * PRODUCT SALES REPORT
    */
   const productReport = useMemo(() => {
-    const map = new Map
+    const map = new Map<
       number,
       { id: number; name: string; qty: number; sales: number }
     >();
@@ -384,7 +384,7 @@ export function useReportsData() {
    * SERVICE REPORT
    */
   const serviceReport = useMemo(() => {
-    const map = new Map
+    const map = new Map<
       number,
       { id: number; name: string; qty: number; revenue: number }
     >();
@@ -416,7 +416,7 @@ export function useReportsData() {
    * CUSTOMER REPORT
    */
   const customerReport = useMemo(() => {
-    const map = new Map
+    const map = new Map<
       number,
       { id: number; name: string; visits: number; spend: number }
     >();
@@ -445,7 +445,7 @@ export function useReportsData() {
    * records.
    */
   const staffReport = useMemo(() => {
-    const map = new Map
+    const map = new Map<
       number,
       {
         id: number;
@@ -472,6 +472,7 @@ export function useReportsData() {
 
       for (const item of sale.items || []) {
         if (!item.staffId) continue;
+        if (staffFilter && String(item.staffId) !== staffFilter) continue;
 
         const itemTotal = Number(item.total || 0);
         const itemShareOfDiscount = saleSubtotal > 0 ? (itemTotal / saleSubtotal) * saleDiscount : 0;
