@@ -12,6 +12,7 @@ interface InventoryItem {
   id: number;
   name: string;
   category: string;
+  sku: string;
   supplier: string;
   supplierContact: string;
   type: "Retail" | "Operational";
@@ -95,6 +96,7 @@ export default function InventoryPage() {
         id: item.id,
         name: item.name || item.productName || "",
         category: item.category || "",
+        sku: item.sku || "",
         supplier: item.supplier || supplierNameById(item.supplierId) || "",
         supplierContact: item.supplierContact || "",
         type: item.type || "Retail",
@@ -290,6 +292,7 @@ export default function InventoryPage() {
         !query ||
         item.name.toLowerCase().includes(query) ||
         item.category.toLowerCase().includes(query) ||
+        item.sku.toLowerCase().includes(query) ||
         item.supplier.toLowerCase().includes(query);
 
       const matchesType =
@@ -361,6 +364,7 @@ export default function InventoryPage() {
               <thead className="bg-gray-50 border-b">
                 <tr>
                   <th className="text-left p-4">Product</th>
+                  <th className="text-left p-4">Code</th>
                   <th className="text-left p-4">Type</th>
                   <th className="text-left p-4">Category</th>
                   <th className="text-left p-4">Supplier</th>
@@ -378,13 +382,13 @@ export default function InventoryPage() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={12} className="p-8 text-center text-gray-500">
+                    <td colSpan={13} className="p-8 text-center text-gray-500">
                       Loading...
                     </td>
                   </tr>
                 ) : paginatedItems.length === 0 ? (
                   <tr>
-                    <td colSpan={12} className="p-8 text-center text-gray-500">
+                    <td colSpan={13} className="p-8 text-center text-gray-500">
                       No inventory items found.
                     </td>
                   </tr>
@@ -399,6 +403,10 @@ export default function InventoryPage() {
                         className="border-b last:border-0"
                       >
                         <td className="p-4 font-medium">{item.name}</td>
+
+                        <td className="p-4 text-gray-600">
+                          {item.sku || "-"}
+                        </td>
 
                         <td className="p-4">{item.type}</td>
 
