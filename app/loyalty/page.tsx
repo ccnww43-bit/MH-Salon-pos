@@ -59,7 +59,18 @@ export default function LoyaltyPage() {
     return await coll.offset((page - 1) * size).limit(size).toArray();
   }, [page, query]);
 
-  const total = useLiveQuery(() => db.customers.count()) || 0;
+  // Total must reflect the active search filter — otherwise Pagination
+  // renders page numbers based on the full unfiltered customer count while
+  // the list above only ever has the (much smaller) filtered results.
+  const total = useLiveQuery(async () => {
+    const q = query.toLowerCase().trim();
+    if (q) {
+      return await db.customers
+        .filter(c => c.name.toLowerCase().includes(q) || c.phone.includes(q))
+        .count();
+    }
+    return await db.customers.count();
+  }, [query]) || 0;
 
   // Program-wide stats still need every customer's point balance to sum
   // correctly. This is a lightweight query (just numbers, no card
