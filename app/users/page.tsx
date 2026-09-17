@@ -108,9 +108,11 @@ export default function UsersManagementPage() {
             </h1>
             <p className="page-subtitle">Role-based security & permissions</p>
           </div>
-          <button onClick={() => { setEditing(null); setForm({username:'', role:'Cashier', permissions:[]}); document.getElementById('user-modal')?.classList.remove('hidden'); }} className="btn btn-primary">
-            <Plus size={18} /> Create User
-          </button>
+          <PermissionGuard permission="create_users">
+            <button onClick={() => { setEditing(null); setForm({username:'', role:'Cashier', permissions:[]}); document.getElementById('user-modal')?.classList.remove('hidden'); }} className="btn btn-primary">
+              <Plus size={18} /> Create User
+            </button>
+          </PermissionGuard>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -123,7 +125,9 @@ export default function UsersManagementPage() {
                 <h3 className="text-lg font-black text-slate-900 tracking-tighter mb-1 uppercase leading-tight">{u.username}</h3>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-10">Terminal ID: #{u.id}</p>
                 <div className="flex gap-2 pt-8 border-t border-slate-50 mt-auto">
-                   <button onClick={() => { setEditing(u.id!); setForm({ ...u, password: '' }); document.getElementById('user-modal')?.classList.remove('hidden'); }} className="flex-1 bg-slate-50 text-slate-400 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-primary hover:text-white transition-all active-click">Modify Access</button>
+                   <PermissionGuard permission="edit_users">
+                     <button onClick={() => { setEditing(u.id!); setForm({ ...u, password: '' }); document.getElementById('user-modal')?.classList.remove('hidden'); }} className="flex-1 bg-slate-50 text-slate-400 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-primary hover:text-white transition-all active-click">Modify Access</button>
+                   </PermissionGuard>
                    <button onClick={async () => {
                      if (u.isActive) {
                        const currentUserId = typeof window !== 'undefined' ? localStorage.getItem('userId') : null;
