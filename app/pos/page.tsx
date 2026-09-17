@@ -8,7 +8,7 @@ import { logAction } from "@/lib/logger";
 import { hasPermission, getPermissions } from "@/lib/permissions";
 import { verifyPassword, hashPassword } from "@/lib/security";
 import {
-  Search, ShoppingCart, User, Trash2, Plus, Minus, X, Tag, ChevronRight, UserCheck, Package, Scissors, CreditCard, DollarSign, Lock, Zap, PauseCircle, ListChecks, PlayCircle, Printer, CheckCircle2, Landmark, Wallet, LayoutGrid
+  Search, ShoppingCart, User, Trash2, Plus, Minus, X, Tag, ChevronRight, UserCheck, Package, Scissors, CreditCard, DollarSign, Lock, Zap, PauseCircle, ListChecks, PlayCircle, Printer, CheckCircle2, Landmark, AlertTriangle, LayoutGrid
 } from "lucide-react";
 
 // Deterministic color per catalog category, used for the small icon badge on
@@ -38,7 +38,6 @@ const PAYMENT_METHOD_META: Record<string, { icon: React.ElementType; label: stri
   "M-Pesa": { icon: Zap, label: "M-Pesa" },
   "Card": { icon: CreditCard, label: "Card" },
   "Bank Transfer": { icon: Landmark, label: "Bank" },
-  "Customer Credit": { icon: Wallet, label: "Credit" },
   "Voucher": { icon: Tag, label: "Voucher" },
 };
 const PAYMENT_METHODS = Object.keys(PAYMENT_METHOD_META) as SalePayment["method"][];
@@ -86,12 +85,6 @@ export default function POSPage() {
   const [managerPassword, setManagerPassword] = useState("");
   const [approvalError, setApprovalError] = useState("");
   const [approvalLoading, setApprovalLoading] = useState(false);
-
-  // Customer credit / advance payment
-  const [showCreditModal, setShowCreditModal] = useState(false);
-  const [creditTopUpAmount, setCreditTopUpAmount] = useState("");
-  const [creditTopUpMethod, setCreditTopUpMethod] = useState<SalePayment["method"]>("Cash");
-  const [creditProcessing, setCreditProcessing] = useState(false);
 
   // Hold / Resume Sale
   const [showHeldModal, setShowHeldModal] = useState(false);
@@ -249,17 +242,19 @@ export default function POSPage() {
 
   const catalogLoading = tab === 'Services' ? services === undefined : inventory === undefined;
 
-  // Always read the customer's credit balance from the live customers list so it
-  // reflects the latest database value (e.g. right after a top-up or a spend).
-  const customerCredit = selectedCustomer
-    ? (customers?.find(c => c.id === selectedCustomer.id)?.creditBalance ?? selectedCustomer.creditBalance ?? 0)
-    : 0;
-
-  const openCreditModal = () => {
-    setCreditTopUpAmount("");
-    setCreditTopUpMethod("Cash");
-    setShowCreditModal(true);
-  };
+  // A customer is a "debtor" whenever they have a Completed sale that isn't
+  // fully paid yet. Computed live from their own sales (not a stored field
+  // on the customer) so it can never drift out of sync with what
+  // Transactions/Reports show — same approach used on the Customers page.
+  const customerDebtSales = useLiveQuery(
+    () => selectedCustomer?.id
+      ? db.sales.where('customerId').equals(selectedCustomer.id).toArray()
+      : Promise.resolve([] as Sale[]),
+    [selectedCustomer?.id]
+  );
+  const customerDebt = (customerDebtSales || [])
+    .filter(s => s.transactionStatus === 'Completed' && s.balance > 0)
+    .reduce((sum, s) => sum + s.balance, 0);
 
   // Walk-in / Cash Sale: for a customer who doesn't want to give their
   // details. Reuses a single, permanent "Walk-in / Cash Customer" record
@@ -279,7 +274,6 @@ export default function POSPage() {
           gender: "Other",
           dob: "",
           notes: "Auto-created so cashiers can ring up walk-in / cash customers who prefer not to share personal details.",
-          creditBalance: 0,
           loyaltyPoints: 0,
           createdAt: new Date(),
           updatedAt: new Date()
@@ -290,56 +284,6 @@ export default function POSPage() {
       if (walkIn) setSelectedCustomer(walkIn);
     } catch (e) {
       alert("Could not set walk-in customer. DB Error.");
-    }
-  };
-
-  const handleAddCredit = async () => {
-    if (!selectedCustomer?.id) return;
-    const amount = Math.round((Number(creditTopUpAmount) || 0) * 100) / 100;
-    if (amount <= 0) { alert("Enter a valid amount."); return; }
-
-    setCreditProcessing(true);
-    try {
-      const inv = `ADV-${Date.now().toString().slice(-8).toUpperCase()}`;
-
-      await db.sales.add({
-        receiptNumber: inv, customerId: selectedCustomer.id, customerName: selectedCustomer.name,
-        items: [], subtotal: amount, discount: 0, tax: 0, total: amount, totalPaid: amount, balance: 0,
-        status: "Advance Payment", transactionStatus: "Completed",
-        payments: [{ method: creditTopUpMethod, amount, date: new Date() }],
-        cashierId: localStorage.getItem("userId") || "0", cashierName: localStorage.getItem("username") || "System",
-        notes: "Customer credit top-up (advance payment)", createdAt: new Date(), updatedAt: new Date()
-      } as any);
-
-      const current = customers?.find(c => c.id === selectedCustomer.id)?.creditBalance ?? selectedCustomer.creditBalance ?? 0;
-      await db.customers.update(selectedCustomer.id, { creditBalance: current + amount, updatedAt: new Date() });
-
-      if (creditTopUpMethod === 'Cash') {
-        const openDrawers = await db.cashDrawers.where('status').equals('Open').toArray();
-        const openDrawer = [...openDrawers].sort(
-          (a: any, b: any) => new Date(b.openedAt).getTime() - new Date(a.openedAt).getTime()
-        )[0];
-
-        if (openDrawer) {
-          await db.cashMovements.add({
-            drawerId: openDrawer.id,
-            type: 'IN',
-            amount,
-            reason: `Credit top-up ${inv} for ${selectedCustomer.name}`,
-            date: new Date(),
-            username: localStorage.getItem('username') || 'System'
-          } as any);
-        }
-      }
-
-      await logAction("Customer Credit", `Recorded ${currency} ${amount.toLocaleString()} advance payment / credit top-up for ${selectedCustomer.name} via ${creditTopUpMethod}.`);
-
-      setShowCreditModal(false);
-      setCreditTopUpAmount("");
-    } catch (e) {
-      alert("Failed to add credit. DB Error.");
-    } finally {
-      setCreditProcessing(false);
     }
   };
 
@@ -548,11 +492,6 @@ export default function POSPage() {
       }
     }
 
-    const creditUsed = payments.filter(p => p.method === "Customer Credit").reduce((sum, p) => sum + p.amount, 0);
-    if (creditUsed > customerCredit) {
-      return alert(`Insufficient customer credit. Available: ${currency} ${customerCredit.toLocaleString()}, requested: ${currency} ${creditUsed.toLocaleString()}.`);
-    }
-
     const voucherCheck = await resolveVoucherUsage();
     if (voucherCheck.error) return alert(voucherCheck.error);
 
@@ -625,11 +564,6 @@ export default function POSPage() {
         }
       });
 
-      // Deduct any customer credit that was spent on this sale
-      if (creditUsed > 0) {
-        await db.customers.update(selectedCustomer.id, { creditBalance: customerCredit - creditUsed, updatedAt: new Date() });
-      }
-
       // Deduct the redeemed amount from each voucher's real balance, and mark
       // it Redeemed once fully used so it can never be spent twice.
       for (const { record, amount } of voucherCheck.usage) {
@@ -691,7 +625,7 @@ export default function POSPage() {
       }
       const loyaltySummary = pointsEarned > 0 ? ` Loyalty points earned: ${pointsEarned}.` : '';
 
-      await logAction("POS Sale", `Authorized ${inv} for ${selectedCustomer.name}. Total: ${total}. Discount applied: ${currency} ${totalDiscount.toLocaleString()}. Tax: ${currency} ${tax.toLocaleString(undefined, { maximumFractionDigits: 2 })}.${creditUsed > 0 ? ` Customer credit used: ${currency} ${creditUsed.toLocaleString()}.` : ''}${voucherSummary}${promoSummary}${membershipSummary}${loyaltySummary}`);
+      await logAction("POS Sale", `Authorized ${inv} for ${selectedCustomer.name}. Total: ${total}. Discount applied: ${currency} ${totalDiscount.toLocaleString()}. Tax: ${currency} ${tax.toLocaleString(undefined, { maximumFractionDigits: 2 })}.${voucherSummary}${promoSummary}${membershipSummary}${loyaltySummary}`);
       setCart([]); setSelectedCustomer(null); setPayments([{ method: "Cash", amount: 0, date: new Date() }]); setDiscount(0);
       setTip(0); setTipInput("");
       setCompletedSale(saleRecord);
@@ -857,12 +791,13 @@ export default function POSPage() {
                 </div>
                 <button onClick={() => setSelectedCustomer(null)} className="text-white/40 hover:text-white p-1 transition-colors shrink-0"><X size={16}/></button>
               </div>
-              <div className="flex justify-between items-center bg-white/5 rounded-xl px-3 py-2">
-                <div className="flex items-center gap-1.5 text-white/60 text-xs">
-                  <CreditCard size={12}/> Credit: {currency} {customerCredit.toLocaleString()}
+              {customerDebt > 0 && (
+                <div className="flex justify-between items-center bg-rose-500/10 rounded-xl px-3 py-2">
+                  <div className="flex items-center gap-1.5 text-rose-300 text-xs font-semibold">
+                    <AlertTriangle size={12}/> Debtor: owes {currency} {customerDebt.toLocaleString()}
+                  </div>
                 </div>
-                <button onClick={openCreditModal} className="text-primary hover:text-white transition-colors text-xs font-semibold">+ Add credit</button>
-              </div>
+              )}
               {activeMembership && (
                 <div className="flex justify-between items-center bg-white/5 rounded-xl px-3 py-2">
                   <div className="flex items-center gap-1.5 text-white/60 text-xs">
@@ -1183,54 +1118,6 @@ export default function POSPage() {
         </div>
       )}
 
-      {showCreditModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[200] p-6">
-          <div className="bg-white rounded-2xl shadow-high p-6 w-full max-w-sm space-y-5">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-primary/10 rounded-xl text-primary"><CreditCard size={18}/></div>
-              <div>
-                <div className="font-bold text-slate-900 text-base leading-tight">Add customer credit</div>
-                <div className="text-xs text-slate-500 mt-0.5">Record an advance payment on account</div>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-500">Amount received ({currency})</label>
-                <input
-                  type="number" min={0} autoFocus
-                  className="w-full p-2.5 rounded-xl border border-slate-200 text-slate-900 text-sm outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                  value={creditTopUpAmount}
-                  onChange={e => setCreditTopUpAmount(e.target.value)}
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-500">Payment method</label>
-                <select
-                  className="w-full p-2.5 rounded-xl border border-slate-200 text-slate-900 text-sm outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all appearance-none cursor-pointer"
-                  value={creditTopUpMethod}
-                  onChange={e => setCreditTopUpMethod(e.target.value as SalePayment["method"])}
-                >
-                  <option>Cash</option><option>M-Pesa</option><option>Card</option><option>Bank Transfer</option><option>Other</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="flex gap-2 pt-1">
-              <button onClick={() => setShowCreditModal(false)} className="flex-1 py-2.5 rounded-xl font-semibold text-sm text-slate-500 bg-slate-50 hover:bg-slate-100 transition-colors">
-                Cancel
-              </button>
-              <button
-                disabled={creditProcessing}
-                onClick={handleAddCredit}
-                className="flex-1 py-2.5 rounded-xl font-semibold text-sm text-white bg-primary shadow-glow-primary hover:bg-primary/90 transition-colors disabled:bg-slate-300 disabled:shadow-none"
-              >
-                {creditProcessing ? "Saving..." : "Add credit"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {showHeldModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[200] p-6">
