@@ -39,8 +39,18 @@ export function useReportsData() {
     []
   );
 
+  // Staff = the employee directory (db.moduleRecords, module 'staff'),
+  // the same source POS checkout, Bookings and Commissions use to record
+  // who performed a service. Deliberately NOT db.users (login accounts) —
+  // item.staffId / booking.staffId below are staff-directory ids, so
+  // filtering against login-account ids would never match anything.
   const staffList = useLiveQuery(
-    () => db.users.filter((u) => u.isActive).toArray(),
+    () =>
+      db.moduleRecords
+        .where("module")
+        .equals("staff")
+        .and((s) => s.status === "Active")
+        .toArray(),
     []
   );
 
@@ -342,7 +352,7 @@ export function useReportsData() {
    * PRODUCT SALES REPORT
    */
   const productReport = useMemo(() => {
-    const map = new Map<
+    const map = new Map
       number,
       { id: number; name: string; qty: number; sales: number }
     >();
@@ -374,7 +384,7 @@ export function useReportsData() {
    * SERVICE REPORT
    */
   const serviceReport = useMemo(() => {
-    const map = new Map<
+    const map = new Map
       number,
       { id: number; name: string; qty: number; revenue: number }
     >();
@@ -406,7 +416,7 @@ export function useReportsData() {
    * CUSTOMER REPORT
    */
   const customerReport = useMemo(() => {
-    const map = new Map<
+    const map = new Map
       number,
       { id: number; name: string; visits: number; spend: number }
     >();
@@ -435,7 +445,7 @@ export function useReportsData() {
    * records.
    */
   const staffReport = useMemo(() => {
-    const map = new Map<
+    const map = new Map
       number,
       {
         id: number;
