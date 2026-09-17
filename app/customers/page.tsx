@@ -57,13 +57,30 @@ export default function CustomersPage() {
     return await coll.offset((page - 1) * size).limit(size).toArray();
   }, [page, query]);
 
-  const total = useLiveQuery(() => db.customers.count()) || 0;
+  const total = useLiveQuery(async () => {
+    const q = query.toLowerCase().trim();
+    if (q) {
+      return await db.customers.filter(c =>
+        c.name.toLowerCase().includes(q) ||
+        c.phone.includes(q) ||
+        !!(c.email?.toLowerCase().includes(q))
+      ).count();
+    }
+    return await db.customers.count();
+  }, [query]) || 0;
 
   const settings = useLiveQuery(() => db.settings.toArray(), []);
   const currency = settings?.[0]?.currency || "KSh";
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // FIX: Prevent duplicate customer profiles for the same phone number.
+    const phoneClash = await db.customers.where('phone').equals(form.phone).first();
+    if (phoneClash && phoneClash.id !== editing) {
+      alert(`A client with phone ${form.phone} already exists: ${phoneClash.name}`);
+      return;
+    }
 
     if (editing) {
       // FIX: Do NOT overwrite creditBalance/loyaltyPoints when editing an existing customer.
@@ -80,6 +97,34 @@ export default function CustomersPage() {
     
     setForm({ name: '', phone: '', email: '', gender: 'Female', dob: '', notes: '' });
     setEditing(null);
+  };
+
+  // FIX: Block deletion when the client has related history or a non-zero
+  // balance, so Sales/Bookings/Clinical Records never end up pointing at a
+  // deleted customerId, and a credit/loyalty balance can't silently vanish.
+  const handleDelete = async (c: Customer) => {
+    const [saleCount, bookingCount, recordCount] = await Promise.all([
+      db.sales.where('customerId').equals(c.id!).count(),
+      db.bookings.where('customerId').equals(c.id!).count(),
+      db.clinicalRecords.where('customerId').equals(c.id!).count(),
+    ]);
+
+    if (saleCount || bookingCount || recordCount) {
+      alert(
+        `Cannot delete ${c.name}: this client has ${saleCount} sale(s), ${bookingCount} booking(s) and ${recordCount} clinical record(s) on file.`
+      );
+      return;
+    }
+
+    if ((c.creditBalance || 0) !== 0 || (c.loyaltyPoints || 0) !== 0) {
+      alert(`Cannot delete ${c.name}: this client still has a credit balance or loyalty points on their account.`);
+      return;
+    }
+
+    if (!confirm('Delete client profile?')) return;
+
+    await db.customers.delete(c.id!);
+    await logAction('Customer Management', `Deleted client: ${c.name}`);
   };
 
   return (
@@ -136,8 +181,12 @@ export default function CustomersPage() {
                     <td className="px-4 py-2.5 text-right">
                       <div className="flex justify-end gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all">
                         <button onClick={() => setViewingCustomer(c)} className="p-3 rounded-2xl bg-white border border-slate-100 text-slate-500 shadow-sm hover:shadow-lg transition-all active-click" title="View profile"><Eye size={18}/></button>
-                        <button onClick={() => { setEditing(c.id!); setForm(c as any); }} className="p-3 rounded-2xl bg-white border border-slate-100 text-primary shadow-sm hover:shadow-lg transition-all active-click"><Edit3 size={18}/></button>
-                        <button onClick={async () => { if(confirm('Delete client profile?')) await db.customers.delete(c.id!) }} className="p-3 rounded-2xl bg-white border border-slate-100 text-danger shadow-sm hover:shadow-lg transition-all active-click"><Trash2 size={18}/></button>
+                        <PermissionGuard permission="edit_customers">
+                          <button onClick={() => { setEditing(c.id!); setForm(c as any); }} className="p-3 rounded-2xl bg-white border border-slate-100 text-primary shadow-sm hover:shadow-lg transition-all active-click"><Edit3 size={18}/></button>
+                        </PermissionGuard>
+                        <PermissionGuard permission="delete_customers">
+                          <button onClick={() => handleDelete(c)} className="p-3 rounded-2xl bg-white border border-slate-100 text-danger shadow-sm hover:shadow-lg transition-all active-click"><Trash2 size={18}/></button>
+                        </PermissionGuard>
                       </div>
                     </td>
                   </tr>
