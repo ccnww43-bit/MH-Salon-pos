@@ -80,6 +80,25 @@ export default function ExpensesPage() {
 
     const expenseAmount = Number(form.amount);
 
+    // Look up an open cash drawer up front — before saving anything — so we
+    // can warn the user now if this Cash expense won't have a matching cash
+    // movement, instead of silently saving it with no drawer deduction and
+    // no indication that the reconciliation gap just reappeared.
+    let openDrawer: any = null;
+    if (form.method === 'Cash' && expenseAmount > 0) {
+      const openDrawers = await db.cashDrawers.where('status').equals('Open').toArray();
+      openDrawer = [...openDrawers].sort(
+        (a: any, b: any) => new Date(b.openedAt).getTime() - new Date(a.openedAt).getTime()
+      )[0] || null;
+
+      if (!openDrawer) {
+        const proceed = confirm(
+          'No cash drawer is currently open. This expense will be saved, but it will NOT be deducted from any cash drawer balance — the drawer will be out of sync with physical cash until this is accounted for manually. Continue anyway?'
+        );
+        if (!proceed) return;
+      }
+    }
+
     await db.moduleRecords.add({
       module: 'expense',
       title: `${form.category}: ${form.description}`,
@@ -93,25 +112,23 @@ export default function ExpensesPage() {
     // If this was paid out of the till, reflect it in the open cash drawer —
     // mirrors the "IN" movement POS checkout posts for cash sales, so the
     // drawer's tracked balance still matches physical cash after the payout.
-    if (form.method === 'Cash' && expenseAmount > 0) {
-      const openDrawers = await db.cashDrawers.where('status').equals('Open').toArray();
-      const openDrawer = [...openDrawers].sort(
-        (a: any, b: any) => new Date(b.openedAt).getTime() - new Date(a.openedAt).getTime()
-      )[0];
-
-      if (openDrawer) {
-        await db.cashMovements.add({
-          drawerId: openDrawer.id,
-          type: 'OUT',
-          amount: expenseAmount,
-          reason: `${form.category} expense: ${form.description}`,
-          date: new Date(),
-          username: localStorage.getItem('username') || 'System'
-        } as any);
-      }
+    if (openDrawer) {
+      await db.cashMovements.add({
+        drawerId: openDrawer.id,
+        type: 'OUT',
+        amount: expenseAmount,
+        reason: `${form.category} expense: ${form.description}`,
+        date: new Date(),
+        username: localStorage.getItem('username') || 'System'
+      } as any);
     }
 
-    await logAction('Expense', `Recorded ${form.category} expense: ${form.amount}`);
+    const noDrawerNote =
+      form.method === 'Cash' && expenseAmount > 0 && !openDrawer
+        ? ' (no cash drawer open — not deducted from till)'
+        : '';
+
+    await logAction('Expense', `Recorded ${form.category} expense: ${form.amount}${noDrawerNote}`);
     setForm({ category: 'Rent', description: '', amount: '', method: 'Cash', date: new Date().toISOString().split('T')[0] });
     setAddingCategory(false);
     setNewCategoryText('');
