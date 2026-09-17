@@ -16,7 +16,11 @@ export default function ClinicalRecordsPage() {
   const [form, setForm] = useState({ customerId: '', recordType: 'Consultation', staffId: '', notes: '' });
   const records = useLiveQuery(() => db.clinicalRecords.reverse().offset((page - 1) * size).limit(size).toArray(), [page]);
   const customers = useLiveQuery(() => db.customers.toArray(), []);
-  const staff = useLiveQuery(() => db.users.filter(u => u.isActive).toArray(), []);
+  // Staff dropdown must come from the real employee directory
+  // (moduleRecords, module: 'staff') — the same source POS and Commissions
+  // use — not from db.users, which is login accounts and can include
+  // people who aren't actually staff (or exclude staff with no account).
+  const staff = useLiveQuery(() => db.moduleRecords.where('module').equals('staff').and(s => s.status === 'Active').toArray(), []);
   const count = useLiveQuery(() => db.clinicalRecords.count()) || 0;
 
   const handleSave = async (e: React.FormEvent) => {
@@ -101,11 +105,11 @@ export default function ClinicalRecordsPage() {
                 </div>
                 <div className="pt-4 border-t border-slate-100 flex items-center gap-3">
                   <div className="w-9 h-9 rounded-xl bg-primary/5 flex items-center justify-center font-black text-primary text-xs uppercase">
-                    {user?.username?.charAt(0) || '?'}
+                    {user?.title?.charAt(0) || '?'}
                   </div>
                   <div>
                     <div className="text-[10px] font-bold text-slate-400 leading-none mb-1">Logged Professional</div>
-                    <div className="text-xs font-black text-slate-900 uppercase leading-none">{user?.username || 'Unknown'}</div>
+                    <div className="text-xs font-black text-slate-900 uppercase leading-none">{user?.title || 'Unknown'}</div>
                   </div>
                 </div>
               </div>
@@ -152,7 +156,7 @@ export default function ClinicalRecordsPage() {
                <label className="field-label">Verified Professional</label>
                <select required className="field-input w-full appearance-none cursor-pointer" value={form.staffId} onChange={e => setForm({...form, staffId: e.target.value})}>
                  <option value="">Authorize Professional...</option>
-                 {staff?.map(u => <option key={u.id} value={u.id}>{u.username}</option>)}
+                 {staff?.map(u => <option key={u.id} value={u.id}>{u.title}</option>)}
                </select>
              </div>
              <div>
