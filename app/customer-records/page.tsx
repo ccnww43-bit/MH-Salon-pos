@@ -1,11 +1,12 @@
 "use client";
 
 import React, { useState } from "react";
-import { db } from "@/lib/db";
+import { db, Customer } from "@/lib/db";
 import { useLiveQuery } from "dexie-react-hooks";
 import { Navbar } from "@/components/navbar";
 import { Pagination } from "@/components/pagination";
 import { PermissionGuard } from "@/components/permissionguard";
+import { CustomerQuickAdd } from "@/components/customer-quick-add";
 import { logAction } from "@/lib/logger";
 import { FileText, Plus, Clipboard, Calendar, X, User, Scissors, Lock } from "lucide-react";
 
@@ -22,6 +23,16 @@ export default function ClinicalRecordsPage() {
   // people who aren't actually staff (or exclude staff with no account).
   const staff = useLiveQuery(() => db.moduleRecords.where('module').equals('staff').and(s => s.status === 'Active').toArray(), []);
   const count = useLiveQuery(() => db.clinicalRecords.count()) || 0;
+
+  // Workflow-audit fix: lets staff register a walk-in customer without
+  // leaving the treatment-log form. `customers` above is a live query, so
+  // the new record shows up in the dropdown automatically once saved —
+  // this handler just selects it and closes the quick-add modal.
+  const [showQuickAddCustomer, setShowQuickAddCustomer] = useState(false);
+  const handleCustomerCreated = (c: Customer) => {
+    setForm(f => ({ ...f, customerId: String(c.id) }));
+    setShowQuickAddCustomer(false);
+  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -140,10 +151,20 @@ export default function ClinicalRecordsPage() {
              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                <div>
                  <label className="field-label">Target Client</label>
-                 <select required className="field-input w-full appearance-none cursor-pointer" value={form.customerId} onChange={e => setForm({...form, customerId: e.target.value})}>
-                   <option value="">Identify Client...</option>
-                   {customers?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                 </select>
+                 <div className="flex gap-2">
+                   <select required className="field-input w-full appearance-none cursor-pointer" value={form.customerId} onChange={e => setForm({...form, customerId: e.target.value})}>
+                     <option value="">Identify Client...</option>
+                     {customers?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                   </select>
+                   <button
+                     type="button"
+                     onClick={() => setShowQuickAddCustomer(true)}
+                     className="shrink-0 btn btn-secondary"
+                     title="Register a new customer without leaving this form"
+                   >
+                     + New
+                   </button>
+                 </div>
                </div>
                <div>
                  <label className="field-label">Procedure Type</label>
@@ -168,6 +189,12 @@ export default function ClinicalRecordsPage() {
         </div>
       </div>
     </div>
+
+    <CustomerQuickAdd
+      open={showQuickAddCustomer}
+      onClose={() => setShowQuickAddCustomer(false)}
+      onCreated={handleCustomerCreated}
+    />
     </PermissionGuard>
   );
 }
