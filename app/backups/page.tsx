@@ -5,8 +5,7 @@ import { db } from "@/lib/db";
 import { logAction } from "@/lib/logger";
 import { Navbar } from "@/components/navbar";
 import { PermissionGuard } from "@/components/permissionguard";
-import { seedDemoData, clearDemoData } from "@/lib/seed-demo-data";
-import { isTrainingMode } from "@/lib/app-mode";
+
 import {
   DatabaseBackup,
   Download,
@@ -15,58 +14,13 @@ import {
   Clock,
   AlertTriangle,
   Lock,
-  Sparkles,
-  Eraser,
 } from "lucide-react";
 
 export default function BackupsPage() {
   const [lastBackup, setLastBackup] = useState<string | null>(null);
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
-  const [demoBusy, setDemoBusy] = useState(false);
-  const [demoStatus, setDemoStatus] = useState("");
 
-  // Demo data (and the buttons that load/remove it) must never be usable in
-  // Production — mixing fake customers/bookings/sales into a real salon's
-  // data would corrupt every report and dashboard downstream. Training Mode
-  // has its own separate database, so it's the only safe place for this.
-  const trainingMode = isTrainingMode();
-
-  const handleLoadDemoData = async () => {
-    if (demoBusy || !trainingMode) return;
-    setDemoBusy(true);
-    setDemoStatus("");
-    try {
-      const result = await seedDemoData();
-      setDemoStatus(
-        `Demo data loaded across every module: ${result.customers} customers, ${result.staff} staff, ${result.bookings} bookings, ${result.sales} sales, ${result.inventory} products, ${result.suppliers} suppliers, ${result.purchaseOrders} purchase orders, ${result.commissions} commissions, ${result.packages} packages, ${result.memberships} memberships, ${result.vouchers} vouchers, ${result.promotions} promotions, ${result.expenses} expenses, ${result.leave} leave requests, ${result.clinicalRecords} clinical records. ` +
-        `Two extra logins were created for testing — username "demo.supervisor" (Supervisor) and "demo.cashier" (Cashier), both with password "Demo@1234".`
-      );
-      await logAction("Backups", "Loaded full demo dataset for testing");
-    } catch (error) {
-      console.error(error);
-      setDemoStatus("Unable to load demo data.");
-    } finally {
-      setDemoBusy(false);
-    }
-  };
-
-  const handleRemoveDemoData = async () => {
-    if (demoBusy || !trainingMode) return;
-    if (!confirm("Remove all demo customers, bookings and sales? This cannot be undone.")) return;
-    setDemoBusy(true);
-    setDemoStatus("");
-    try {
-      await clearDemoData();
-      setDemoStatus("Demo data removed.");
-      await logAction("Backups", "Removed demo data");
-    } catch (error) {
-      console.error(error);
-      setDemoStatus("Unable to remove demo data.");
-    } finally {
-      setDemoBusy(false);
-    }
-  };
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -481,61 +435,6 @@ export default function BackupsPage() {
           {status}
         </div>
       )}
-
-      <div className="gloss-card p-5">
-        <div className="w-20 h-20 rounded-lg bg-primary/10 text-primary flex items-center justify-center mb-8">
-          <Sparkles size={42} />
-        </div>
-
-        <h2 className="text-lg font-black text-slate-900 tracking-tighter uppercase">
-          Demo Data
-        </h2>
-
-        <p className="text-slate-500 font-bold mt-3">
-          Load a full sample dataset — customers, staff, bookings, sales, inventory, suppliers, expenses, and every other module — for testing. Remove it again with one click when you're done.
-        </p>
-
-        {!trainingMode && (
-          <div className="mt-8 flex items-start gap-3 bg-warning/5 border border-warning/10 rounded-lg px-4 py-6">
-            <AlertTriangle size={20} className="text-warning shrink-0" />
-            <p className="text-xs font-bold text-slate-500 leading-relaxed">
-              Demo data tools are disabled in Production to keep fake records out of your real reports. Switch to Training Mode to load or remove demo data.
-            </p>
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-10">
-          <button
-            onClick={handleLoadDemoData}
-            disabled={demoBusy || !trainingMode}
-            title={!trainingMode ? "Only available in Training Mode" : undefined}
-            className="bg-primary text-white py-6 rounded-lg font-black uppercase tracking-widest shadow-high hover:scale-[1.01] active:scale-95 transition-all disabled:opacity-50 disabled:hover:scale-100"
-          >
-            <span className="flex items-center justify-center gap-3">
-              <Sparkles size={22} />
-              {demoBusy ? "Working..." : "Load Demo Data"}
-            </span>
-          </button>
-
-          <button
-            onClick={handleRemoveDemoData}
-            disabled={demoBusy || !trainingMode}
-            title={!trainingMode ? "Only available in Training Mode" : undefined}
-            className="bg-danger text-white py-6 rounded-lg font-black uppercase tracking-widest shadow-high hover:scale-[1.01] active:scale-95 transition-all disabled:opacity-50 disabled:hover:scale-100"
-          >
-            <span className="flex items-center justify-center gap-3">
-              <Eraser size={22} />
-              {demoBusy ? "Working..." : "Remove Demo Data"}
-            </span>
-          </button>
-        </div>
-
-        {demoStatus && (
-          <div className="mt-8 bg-slate-50 rounded-lg px-4 py-6 font-black text-sm text-slate-700">
-            {demoStatus}
-          </div>
-        )}
-      </div>
     </div>
     </PermissionGuard>
   );
