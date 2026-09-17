@@ -28,6 +28,12 @@ function TransactionsPageInner() {
   const [query, setQuery] = useState("");
   const size = 12;
 
+  // Reset to page 1 whenever the search changes so the user isn't stranded
+  // on a now out-of-range page — same pattern used on Inventory/Loyalty.
+  useEffect(() => {
+    setPage(1);
+  }, [query]);
+
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [actionReason, setActionReason] = useState("");
 
@@ -109,7 +115,18 @@ function TransactionsPageInner() {
     return await db.sales.reverse().offset((page - 1) * size).limit(size).toArray();
   }, [page, query]);
 
-  const totalCount = useLiveQuery(() => db.sales.count()) || 0;
+  // Total must reflect the active search filter — otherwise Pagination
+  // renders page numbers based on the full unfiltered sales count while the
+  // list above only ever has the (much smaller) filtered results.
+  const totalCount = useLiveQuery(async () => {
+    const q = query.toLowerCase().trim();
+    if (q) {
+      return await db.sales
+        .filter(s => s.receiptNumber.toLowerCase().includes(q) || s.customerName.toLowerCase().includes(q))
+        .count();
+    }
+    return await db.sales.count();
+  }, [query]) || 0;
 
   // Restores stock for every Product line item on a sale and writes a matching
   // inventoryMovements entry (same shape Purchase Orders already uses), so a
